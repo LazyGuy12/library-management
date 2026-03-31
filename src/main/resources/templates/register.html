@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Đăng ký</title>
+    <style>
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #f4f4f4; }
+        .reg-container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 350px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    </style>
+</head>
+<body>
+<div class="reg-container">
+    <h2>Đăng Ký Độc Giả</h2>
+    <form th:action="@{/register}" method="post" th:object="${user}">
+        <label for="reg-user">Tên đăng nhập</label>
+        <input type="text" id="reg-user" th:field="*{username}" required>
+
+        <label for="reg-pass">Mật khẩu</label>
+        <input type="password" id="reg-pass" th:field="*{password}" required>
+
+        <label for="reg-name">Họ và tên</label>
+        <input type="text" id="reg-name" th:field="*{fullName}" required>
+
+        <button type="submit">Đăng ký</button>
+    </form>
+</div>
+</body>
+</html>

@@ -3,14 +3,10 @@ package library_management.security;
 import library_management.models.User;
 import library_management.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
@@ -19,18 +15,14 @@ public class CustomUserDetailsService implements UserDetailsService {
     private UserRepository userRepository;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+    public UserDetails loadUserByUsername(String mssv) throws UsernameNotFoundException {
+        User user = userRepository.findByMssv(mssv)
+                .orElseThrow(() -> new UsernameNotFoundException("Không tìm thấy sinh viên có mã: " + mssv));
 
-        // Chuyển đổi ERole thành GrantedAuthority của Spring Security
-        List<SimpleGrantedAuthority> authorities = user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority(role.name()))
-                .collect(Collectors.toList());
-
-        return new org.springframework.security.core.userdetails.User(
-                user.getUsername(),
-                user.getPassword(),
-                authorities);
+        return org.springframework.security.core.userdetails.User
+                .withUsername(user.getMssv())
+                .password(user.getPassword())
+                .roles(user.getRole()) // Spring sẽ tự thêm tiền tố ROLE_
+                .build();
     }
 }

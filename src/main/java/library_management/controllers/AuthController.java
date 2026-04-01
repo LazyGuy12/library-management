@@ -1,50 +1,45 @@
 package library_management.controllers;
 
-import library_management.models.ERole;
 import library_management.models.User;
 import library_management.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-
-import java.util.Set;
+import org.springframework.web.bind.annotation.*;
+import java.time.LocalDate;
 
 @Controller
 public class AuthController {
-
     @Autowired
     private UserRepository userRepository;
-
     @Autowired
-    private BCryptPasswordEncoder passwordEncoder;
+    private BCryptPasswordEncoder encoder;
 
-    // 1. Trả về trang login
     @GetMapping("/login")
-    public String login() {
-        return "login"; // Trả về file login.html trong templates
-    }
+    public String login() { return "login"; }
 
-    // 2. Trả về trang đăng ký
     @GetMapping("/register")
-    public String showRegisterForm(Model model) {
+    public String showRegister(Model model) {
         model.addAttribute("user", new User());
-        return "register"; // Trả về file register.html
+        return "register";
     }
 
-    // 3. Xử lý logic đăng ký người dùng mới
     @PostMapping("/register")
-    public String registerUser(@ModelAttribute User user) {
-        // Mã hóa mật khẩu trước khi lưu
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-
-        // Mặc định đăng ký xong là quyền USER (Độc giả)
-        user.setRoles(Set.of(ERole.ROLE_USER));
-
+    public String register(@ModelAttribute User user) {
+        // 1. Mã hóa mật khẩu
+        user.setPassword(encoder.encode(user.getPassword()));
+        user.setRole("USER");
+        
+        // 2. Tự động tạo IdCard: LIB-2026-MSSV
+        String cardId = "LIB-" + LocalDate.now().getYear() + "-" + user.getMssv();
+        user.setIdCard(cardId);
+        
+        // 3. Hạn dùng 1 năm & Trạng thái hoạt động
+        user.setExpiryDate(LocalDate.now().plusYears(1));
+        user.setStatus("ACTIVE");
+        
         userRepository.save(user);
-        return "redirect:/login"; // Đăng ký xong quay về login
+        return "redirect:/login?registered";
     }
 }

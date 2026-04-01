@@ -70,4 +70,17 @@ public class AdminController {
         bookRepository.deleteById(id);
         return "redirect:/admin/add-book?deleted";
     }
+
+    @GetMapping("/borrow-book/{id}")
+    public String borrowBook(@PathVariable String id) {
+        bookRepository.findById(id).ifPresent(book -> {
+            if (book.getQuantity() > 0) {
+                // Giảm số lượng đi 1
+                book.setQuantity(book.getQuantity() - 1);
+                bookRepository.save(book);
+            }
+        });
+        // Trả về trang cũ với tham số borrowed để hiện thông báo
+        return "redirect:/admin/add-book?borrowed";
+    }
 }

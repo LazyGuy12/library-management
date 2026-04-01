@@ -1,29 +1,79 @@
 package library_management.models;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import java.time.LocalDate;
+
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.util.HashSet;
-import java.util.Set;
-
 @Document(collection = "users")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class User {
+
     @Id
-    private String id; // MongoDB dùng String làm ID mặc định
-
-    @Indexed(unique = true)
-    private String username;
-
+    private String id;
+    private String mssv;      // Tài khoản đăng nhập (Ví dụ: 2108110123)
     private String password;
     private String fullName;
+    private String email;
+    private String role;      // "ADMIN" hoặc "USER"
 
-    // Quan trọng: Lưu một danh sách các Role cho User này
-    private Set<ERole> roles = new HashSet<>();
+    // Thông tin thẻ độc giả
+    private String idCard;     // Tự động sinh (Ví dụ: LIB-2026-2108110123)
+    private LocalDate expiryDate;
+    private String status;
+
+    // ===== GETTER SETTER =====
+    public String getId() {
+        return id;
+    }
+    public void setId(String id) {
+        this.id = id;
+    }
+    public String getMssv() {
+        return mssv;
+    }
+    public void setMssv(String mssv) {
+        this.mssv = mssv;
+    }
+    public String getPassword() {
+        return password;
+    }
+    public void setPassword(String password) {
+        this.password = password;
+    }
+    public String getFullName() {
+        return fullName;
+    }
+    public void setFullName(String fullName) {
+        this.fullName = fullName;
+    }
+    public String getEmail() {
+        return email;
+    }
+    public void setEmail(String email) {
+        this.email = email;
+    }
+    public String getRole() {
+        return role;
+    }
+    public void setRole(String role) {
+        this.role = role;
+    }
+    public String getIdCard() {
+        return idCard;
+    }
+    public void setIdCard(String idCard) {
+        this.idCard = idCard;
+    }
+    public LocalDate getExpiryDate() {
+        return expiryDate;
+    }
+    public void setExpiryDate(LocalDate expiryDate) {
+        this.expiryDate = expiryDate;
+    }
+    public String getStatus() {
+        return status;
+    }
+    public void setStatus(String status) {
+        this.status = status;
+    }
 }

@@ -7,8 +7,13 @@
 </head>
 <body class="bg-light">
     <div class="container mt-5">
-        <div th:if="${param.success}" class="alert alert-success alert-dismissible fade show">
+        <div th:if="${param.success}" class="alert alert-success alert-dismissible fade show shadow-sm">
             Thao tác dữ liệu thành công!
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <div th:if="${param.borrowed}" class="alert alert-info alert-dismissible fade show shadow-sm">
+            ✅ Đã xác nhận mượn sách thành công! Số lượng trong kho đã giảm.
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
 
@@ -102,13 +107,20 @@
                                       th:text="${b.quantity}"></span>
                             </td>
                             <td class="text-center">
-                                <div class="btn-group">
+                                <div class="btn-group shadow-sm">
                                     <a th:href="@{/admin/edit-book/{id}(id=${b.id})}" class="btn btn-sm btn-warning">Sửa</a>
                                     <a th:href="@{/admin/delete-book/{id}(id=${b.id})}" 
                                        class="btn btn-sm btn-danger" 
-                                       onclick="return confirm('Xác nhận xóa?')">Xóa</a>
+                                       onclick="return confirm('Xác nhận xóa cuốn sách này?')">Xóa</a>
+                                    
+                                    <a th:href="@{/admin/borrow-book/{id}(id=${b.id})}" 
+                                       th:classappend="${b.quantity <= 0} ? 'disabled' : ''"
+                                       class="btn btn-sm btn-info text-white">Mượn</a>
                                 </div>
                             </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(books)}">
+                            <td colspan="6" class="text-center py-4 text-muted">Thư viện hiện chưa có sách nào.</td>
                         </tr>
                     </tbody>
                 </table>

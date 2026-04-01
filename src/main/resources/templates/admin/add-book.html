@@ -2,17 +2,18 @@
 <html lang="vi" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Thêm sách mới - HUTECH Library</title>
+    <title>Thêm sách mới - Ngu Quy Library</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
     <div class="container mt-5">
         <div class="card shadow">
-            <div class="card-header bg-primary text-white">
-                <h3 class="mb-0">Thêm Sách Vào Thư Viện</h3>
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h3 class="mb-0" th:text="${book.id == null ? 'Thêm Sách Vào Thư Viện' : 'Cập Nhật Sách: ' + book.title}"></h3>
+                <a th:if="${book.id != null}" href="/admin/add-book" class="btn btn-sm btn-light text-primary fw-bold">Hủy sửa & Thêm mới</a>
             </div>
             <div class="card-body">
-                <form th:action="@{/admin/add-book}" th:object="${book}" method="post">
+                <form th:action="@{/admin/add-book}" th:object="${book}" method="post" enctype="multipart/form-data">                
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="title" class="form-label">Tên sách</label>
@@ -45,12 +46,65 @@
                         </select>
                     </div>
 
+                    <div class="mb-3">
+                        <label for="imageFile" class="form-label">Hình ảnh bìa sách</label>
+                        <input type="file" id="imageFile" name="imageFile" class="form-control" accept="image/*">
+                    </div>
+                    
                     <div class="d-flex justify-content-between">
                         <a href="/admin/books" class="btn btn-secondary">Quay lại danh sách</a>
                         <button type="submit" class="btn btn-success">Lưu vào hệ thống</button>
                     </div>
                 </form>
             </div>
+        </div>
+    </div>
+    <div class="card shadow mt-5">
+        <div class="card-header bg-dark text-white">
+            <h3 class="mb-0">Danh Sách Sách Trong Kho</h3>
+        </div>
+        <div class="card-body">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Ảnh</th>
+                        <th>Tên sách</th>
+                        <th>Tác giả</th>
+                        <th>ISBN</th>
+                        <th>Số lượng</th>
+                        <th class="text-center">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="b : ${books}">
+                        <td>
+                            <img th:src="${b.imageUrl != null ? b.imageUrl : 'https://via.placeholder.com/50'}" 
+                                alt="Bìa" style="width: 50px; height: 70px; object-fit: cover;" class="rounded shadow-sm">
+                        </td>
+                        <td th:text="${b.title}" class="fw-bold"></td>
+                        <td th:text="${b.author}"></td>
+                        <td th:text="${b.isbn}"></td>
+                        <td>
+                            <span th:class="${b.quantity > 0 ? 'badge bg-success' : 'badge bg-danger'}" 
+                                th:text="${b.quantity}"></span>
+                        </td>
+                        <td class="text-center">
+                            <div class="btn-group">
+                                <a th:href="@{/admin/edit-book/{id}(id=${b.id})}" class="btn btn-sm btn-warning">Sửa</a>
+                                
+                                <a th:href="@{/admin/delete-book/{id}(id=${b.id})}" 
+                                class="btn btn-sm btn-danger" 
+                                onclick="return confirm('Bạn có chắc chắn muốn xóa cuốn sách này?')">Xóa</a>
+                                
+                                <button class="btn btn-sm btn-info text-white">Mượn</button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(books)}">
+                        <td colspan="6" class="text-center text-muted">Chưa có sách nào trong thư viện.</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </body>

@@ -45,6 +45,6 @@ public class AuthController {
         user.setRoles(Set.of(ERole.ROLE_USER));
 
         userRepository.save(user);
-        return "redirect:/login?success"; // Đăng ký xong quay về login
+        return "redirect:/login"; // Đăng ký xong quay về login
     }
 }

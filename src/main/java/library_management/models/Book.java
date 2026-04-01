@@ -12,6 +12,7 @@ public class Book {
     private String title;
     private String category;
     private String author;
+    private String imageUrl;
     private int quantity;
     private String isbn;
 }

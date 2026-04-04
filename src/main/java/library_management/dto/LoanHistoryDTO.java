@@ -39,4 +39,5 @@ public class LoanHistoryDTO {
     
     private String status;              // ACTIVE hoặc RETURNED
     private int lateFee;                // Tiền phạt nếu quá hạn
+    private int quantity;               // Số lượng sách mượn
 }

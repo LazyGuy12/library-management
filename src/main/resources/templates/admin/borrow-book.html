@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <title>Mượn Sách - Ngu Quy Library</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        .reader-card-sidebar { 
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+        }
+        .offcanvas-body::-webkit-scrollbar { width: 5px; }
+        .offcanvas-body::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm" th:replace="~{fragments/header :: navbar}"></nav>
+    
+    <!-- Sidebar -->
+    <div th:replace="~{fragments/header :: sidebar}"></div>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                
+                <!-- Thông báo lỗi nếu có -->
+                <div th:if="${error}" class="alert alert-danger alert-dismissible fade show shadow-sm">
+                    <strong><i class="bi bi-exclamation-circle me-2"></i>Lỗi!</strong>
+                    <span th:text="${error}"></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+
+                <div class="card shadow-lg border-0">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">
+                            <i class="bi bi-book me-2"></i>Mượn Sách
+                        </h4>
+                    </div>
+                    <div class="card-body p-4">
+                        
+                        <!-- Thông tin sách -->
+                        <div class="alert alert-info mb-4">
+                            <h6 class="text-dark mb-2"><i class="bi bi-info-circle me-2"></i>Thông Tin Sách</h6>
+                            <p class="mb-1"><strong>Tên sách:</strong> <span th:text="${book.title}"></span></p>
+                            <p class="mb-1"><strong>Tác giả:</strong> <span th:text="${book.author}"></span></p>
+                            <p class="mb-0"><strong>Thể loại:</strong> <span th:text="${book.category}"></span></p>
+                        </div>
+
+                        <!-- Form mượn sách -->
+                        <form th:action="@{/admin/save-borrow}" method="post">
+                            <!-- Hidden field: bookId -->
+                            <input type="hidden" name="bookId" th:value="${book.id}">
+
+                            <!-- Mã thẻ độc giả -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-credit-card me-1 text-primary"></i>Mã Thẻ Độc Giả
+                                </label>
+                                <input type="text" 
+                                       name="idCard" 
+                                       class="form-control form-control-lg" 
+                                       placeholder="Nhập mã thẻ độc giả của bạn (ví dụ: LIB-2026-2280601489)"
+                                       required
+                                       autofocus>
+                                <small class="text-muted d-block mt-1">
+                                    💡 Mã thẻ là mã thẻ độc giả được cấp khi đăng ký tài khoản
+                                </small>
+                            </div>
+
+                            <!-- Ngày hạn trả -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-calendar-check me-1 text-success"></i>Ngày Hạn Trả
+                                </label>
+                                <input type="date" 
+                                       name="dueDate" 
+                                       class="form-control form-control-lg"
+                                       th:value="${defaultDueDate}"
+                                       required>
+                                <small class="text-muted d-block mt-1">
+                                    ⏰ Mặc định: 14 ngày từ hôm nay
+                                </small>
+                            </div>
+
+                            <!-- Số lượng sách -->
+                            <div class="mb-4">
+                                <label class="form-label fw-bold">
+                                    <i class="bi bi-stack me-1 text-warning"></i>Số Lượng
+                                </label>
+                                <input type="number" 
+                                       name="quantity" 
+                                       class="form-control form-control-lg"
+                                       value="1"
+                                       min="1"
+                                       max="3"
+                                       required>
+                                <small class="text-muted d-block mt-1">
+                                    📚 Tối đa 3 cuốn/lần mượn
+                                </small>
+                            </div>
+
+                            <!-- Nút hành động -->
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-success btn-lg shadow-sm">
+                                    <i class="bi bi-check-circle me-2"></i>Xác Nhận Mượn Sách
+                                </button>
+                                <a th:href="@{/admin/add-book}" class="btn btn-secondary btn-lg">
+                                    <i class="bi bi-arrow-left me-2"></i>Quay Lại
+                                </a>
+                            </div>
+                        </form>
+
+                        <!-- Chú ý -->
+                        <div class="alert alert-warning mt-4 small" role="alert">
+                            <h6 class="text-dark mb-2">
+                                <i class="bi bi-exclamation-triangle me-1"></i>Điều kiện mượn sách:
+                            </h6>
+                            <ul class="mb-0 ps-3">
+                                <li>Thẻ độc giả phải <strong>ACTIVE</strong> và <strong>chưa hết hạn</strong></li>
+                                <li>Bạn chỉ được mượn <strong>tối đa 3 cuốn</strong></li>
+                                <li>Hạn trả mặc định là <strong>14 ngày</strong></li>
+                                <li>Nếu quá hạn, sẽ bị <strong>phạt tiền</strong></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

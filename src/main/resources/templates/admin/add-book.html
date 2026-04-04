@@ -1,26 +1,61 @@
 <!DOCTYPE html>
-<html lang="vi" xmlns:th="http://www.thymeleaf.org">
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
     <title>Quản lý sách - Ngu Quy Library</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        .btn.disabled {
+            pointer-events: none;
+            opacity: 0.65;
+        }
+        .reader-card-sidebar { 
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+        }
+        .offcanvas-body::-webkit-scrollbar { width: 5px; }
+        .offcanvas-body::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 10px; }
+    </style>
 </head>
 <body class="bg-light">
+    <!-- Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm" th:replace="~{fragments/header :: navbar}"></nav>
+    
+    <!-- Sidebar -->
+    <div th:replace="~{fragments/header :: sidebar}"></div>
     <div class="container mt-5">
+        <!-- Thông báo thành công thêm/sửa sách -->
         <div th:if="${param.success}" class="alert alert-success alert-dismissible fade show shadow-sm">
-            Thao tác dữ liệu thành công!
+            ✅ Thao tác dữ liệu thành công!
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
 
-        <div th:if="${param.borrowed}" class="alert alert-info alert-dismissible fade show shadow-sm">
-            ✅ Đã xác nhận mượn sách thành công! Số lượng trong kho đã giảm.
+        <!-- Thông báo thành công mượn sách (Flash Attribute) -->
+        <div th:if="${borrowSuccess}" class="alert alert-success alert-dismissible fade show shadow-sm">
+            <strong>Mượn sách thành công!</strong><br/>
+            <span th:text="${borrowSuccess}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <!-- Thông báo lỗi mượn sách (Flash Attribute) -->
+        <div th:if="${borrowError}" class="alert alert-danger alert-dismissible fade show shadow-sm">
+            <strong>Không thể mượn sách!</strong><br/>
+            <span th:text="${borrowError}"></span>
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
 
         <div class="card shadow">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                 <h3 class="mb-0" th:text="${book.id == null ? 'Thêm Sách Vào Thư Viện' : 'Cập Nhật Sách: ' + book.title}"></h3>
-                <a th:if="${book.id != null}" href="/admin/add-book" class="btn btn-sm btn-light text-primary fw-bold">Hủy sửa & Thêm mới</a>
+                <div class="d-flex gap-2">
+                    <a th:if="${book.id != null}" href="/admin/add-book" class="btn btn-sm btn-light text-primary fw-bold">Hủy sửa & Thêm mới</a>
+                    <a href="/admin/borrow-history" class="btn btn-sm btn-warning text-dark fw-bold">
+                        <i class="bi bi-clock-history me-1"></i>Lịch Sử Mượn
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 <form th:action="@{/admin/add-book}" th:object="${book}" method="post" enctype="multipart/form-data">
@@ -57,6 +92,10 @@
                             <option value="Kinh tế">Kinh tế</option>
                             <option value="Ngoại ngữ">Ngoại ngữ</option>
                             <option value="Kỹ năng mềm">Kỹ năng mềm</option>
+                            <option value="Văn học">Văn học</option>
+                            <option value="Khoa học">Khoa học</option>
+                            <option value="Nghệ thuật">Nghệ thuật</option>
+                            <option value="Khác">Khác</option>
                         </select>
                     </div>
 
@@ -113,9 +152,12 @@
                                        class="btn btn-sm btn-danger" 
                                        onclick="return confirm('Xác nhận xóa cuốn sách này?')">Xóa</a>
                                     
-                                    <a th:href="@{/admin/borrow-book/{id}(id=${b.id})}" 
-                                       th:classappend="${b.quantity <= 0} ? 'disabled' : ''"
-                                       class="btn btn-sm btn-info text-white">Mượn</a>
+                                    <a th:if="${b.status == null or b.status == 'AVAILABLE'}" th:href="@{/admin/borrow-form/{id}(id=${b.id})}" class="btn btn-sm btn-success text-white" title="Mượn sách">
+                                        <i class="bi bi-bookmark-plus me-1"></i>Mượn
+                                    </a>
+                                    <span th:if="${b.status != null and b.status != 'AVAILABLE'}" class="btn btn-sm btn-secondary disabled" title="Sách này hiện không có sẵn">
+                                        <i class="bi bi-bookmark-plus me-1"></i>Mượn
+                                    </span>
                                 </div>
                             </td>
                         </tr>

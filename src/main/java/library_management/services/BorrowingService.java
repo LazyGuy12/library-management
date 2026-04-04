@@ -108,12 +108,15 @@ public class BorrowingService {
                 .orElseThrow(() -> new BorrowingException("Không tìm thấy cuốn sách", "BOOK_NOT_FOUND"));
             logger.info("✅ Tìm được sách: {}", book.getTitle());
             
-            // ===== BƯỚC 2: Kiểm tra trạng thái sách =====
-            logger.info("🔍 Step 2: Kiểm tra trạng thái sách (status: {})", book.getStatus());
-            if (!book.getStatus().equals("AVAILABLE")) {
+            // ===== BƯỚC 2: Kiểm tra số lượng sách còn trong kho =====
+            logger.info("🔍 Step 2: Kiểm tra số lượng sách (quantity: {}, yêu cầu: {})", book.getQuantity(), quantity);
+            if (book.getQuantity() < quantity) {
+                throw new BookNotAvailableException("Sách '" + book.getTitle() + "' không đủ số lượng. Còn lại: " + book.getQuantity());
+            }
+            if (book.getQuantity() <= 0) {
                 throw new BookNotAvailableException(book.getTitle());
             }
-            logger.info("✅ Sách có sẵn");
+            logger.info("✅ Sách đủ số lượng");
             
             // ===== BƯỚC 3: Lấy thông tin người dùng =====
             logger.info("🔍 Step 3: Lấy thông tin người dùng (ID: {})", userId);
@@ -139,6 +142,7 @@ public class BorrowingService {
                 .borrowDate(LocalDate.now())
                 .dueDate(dueDate)
                 .status("ACTIVE")
+                .quantity(quantity)
                 .lateFee(0)
                 .createdAt(LocalDateTime.now())
                 .notes("Mượn sách từ thư viện - Số lượng: " + quantity)
@@ -148,11 +152,15 @@ public class BorrowingService {
             Loan savedLoan = loanRepository.save(loan);
             logger.info("✅ Loan saved with ID: {}", savedLoan.getId());
             
-            // ===== BƯỚC 7: Cập nhật trạng thái sách =====
-            logger.info("🔍 Step 7: Cập nhật Book.status thành BORROWED");
-            book.setStatus("BORROWED");
+            // ===== BƯỚC 7: Giảm số lượng sách trong kho =====
+            logger.info("🔍 Step 7: Giảm số lượng sách ({} - {})", book.getQuantity(), quantity);
+            book.setQuantity(book.getQuantity() - quantity);
+            if (book.getQuantity() <= 0) {
+                book.setStatus("BORROWED");
+                logger.info("📕 Hết sách, cập nhật status = BORROWED");
+            }
             bookRepository.save(book);
-            logger.info("✅ Book updated to BORROWED");
+            logger.info("✅ Book quantity updated: {}", book.getQuantity());
             
             logger.info("🎉 Mượn sách thành công!");
             return savedLoan;
@@ -230,9 +238,11 @@ public class BorrowingService {
         loan.setStatus("RETURNED");
         Loan updatedLoan = loanRepository.save(loan);
         
-        // Cập nhật trạng thái sách về AVAILABLE
+        // Cộng lại số lượng sách khi trả
         Book book = bookRepository.findById(bookId)
             .orElseThrow(() -> new BorrowingException("Không tìm thấy sách", "BOOK_NOT_FOUND"));
+        int returnQuantity = loan.getQuantity() > 0 ? loan.getQuantity() : 1;
+        book.setQuantity(book.getQuantity() + returnQuantity);
         book.setStatus("AVAILABLE");
         bookRepository.save(book);
         

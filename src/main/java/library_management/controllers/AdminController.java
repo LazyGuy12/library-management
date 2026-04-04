@@ -146,9 +146,9 @@ public class AdminController {
         Book book = bookRepository.findById(bookId)
             .orElseThrow(() -> new RuntimeException("Không tìm thấy sách"));
         
-        // Kiểm tra sách có sẵn không
-        if (!book.getStatus().equals("AVAILABLE")) {
-            model.addAttribute("error", "Sách này hiện không có sẵn để mượn");
+        // Kiểm tra sách còn số lượng không
+        if (book.getQuantity() <= 0) {
+            model.addAttribute("error", "Sách này hiện không có sẵn để mượn (hết sách)");
         }
         
         model.addAttribute("book", book);

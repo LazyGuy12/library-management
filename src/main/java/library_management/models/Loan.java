@@ -45,6 +45,9 @@ public class Loan {
     // Số tiền phạt (nếu quá hạn)
     private int lateFee;
     
+    // Số lượng sách mượn
+    private int quantity;
+    
     // Thời gian tạo bản ghi
     private LocalDateTime createdAt;
     

@@ -1,6 +1,7 @@
 package library_management.models;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -19,7 +20,14 @@ public class User {
     // Thông tin thẻ độc giả
     private String idCard;     // Tự động sinh (Ví dụ: LIB-2026-2108110123)
     private LocalDate expiryDate;
+    // Trạng thái: "ACTIVE" (hoạt động), "EXPIRED" (hết hạn), "SUSPENDED" (bị khóa do vi phạm)
     private String status;
+    
+    // Ngày gia hạn thẻ lần cuối
+    private LocalDate lastRenewedDate;
+    
+    // Số lần gia hạn trong năm này
+    private int renewalCount;
 
     // ===== GETTER SETTER =====
     public String getId() {
@@ -75,5 +83,21 @@ public class User {
     }
     public void setStatus(String status) {
         this.status = status;
+    }
+    
+    public LocalDate getLastRenewedDate() {
+        return lastRenewedDate;
+    }
+    
+    public void setLastRenewedDate(LocalDate lastRenewedDate) {
+        this.lastRenewedDate = lastRenewedDate;
+    }
+    
+    public int getRenewalCount() {
+        return renewalCount;
+    }
+    
+    public void setRenewalCount(int renewalCount) {
+        this.renewalCount = renewalCount;
     }
 }

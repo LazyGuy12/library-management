@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" 
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mượn Sách</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 40px 0;
+        }
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1.5px solid #ddd;
+            padding: 10px 15px;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a6fd8 0%, #6a3f98 100%);
+            transform: translateY(-2px);
+        }
+        .alert {
+            border-radius: 8px;
+            border: none;
+        }
+        .book-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .book-item {
+            padding: 12px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .book-item:hover {
+            background: #f0f0f0;
+            border-color: #667eea;
+        }
+        .book-item.selected {
+            background: #e7f4fc;
+            border-color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div th:replace="fragments/header :: navbar"></div>
+
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <div class="card">
+                    <div class="card-header bg-gradient text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <h4 class="mb-0">📚 Mượn Sách</h4>
+                    </div>
+
+                    <div class="card-body p-5">
+                        <!-- Thông báo lỗi -->
+                        <div th:if="${error}" class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <strong>❌ Lỗi!</strong> <span th:text="${error}"></span>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+
+                        <!-- Thông báo thành công -->
+                        <div th:if="${success}" class="alert alert-success alert-dismissible fade show" role="alert">
+                            <strong>✅ Thành công!</strong> <span th:text="${success}"></span>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+
+                        <form th:action="@{/borrowing/borrow}" method="post" id="borrowForm">
+                            <!-- Chọn sách -->
+                            <div class="mb-4">
+                                <label for="bookId" class="form-label fw-bold">📖 Chọn Sách Cần Mượn *</label>
+                                <input type="hidden" id="bookId" name="bookId" value="" required>
+                                <div class="book-list border rounded p-3">
+                                    <div th:if="${books.isEmpty()}" class="text-center text-muted py-5">
+                                        <p>Không có sách nào để mượn</p>
+                                    </div>
+                                    <div th:each="book : ${books}" 
+                                         class="book-item" 
+                                         th:data-book-id="${book.id}"
+                                         onclick="selectBook(this)">
+                                        <div class="fw-bold" th:text="${book.title}"></div>
+                                        <small class="text-muted">
+                                            Tác giả: <span th:text="${book.author}"></span> | 
+                                            Còn lại: <span th:text="${book.quantity}" class="badge bg-info"></span>
+                                        </small>
+                                    </div>
+                                </div>
+                                <small class="text-muted">Nhấp chọn sách từ danh sách trên</small>
+                            </div>
+
+                            <!-- Số lượng mượn -->
+                            <div class="mb-4">
+                                <label for="quantity" class="form-label fw-bold">📊 Số Lượng Mượn *</label>
+                                <input type="number" class="form-control" id="quantity" name="quantity" value="1" min="1" max="3" required>
+                                <small class="text-muted">Mỗi lần tối đa mượn 3 cuốn</small>
+                            </div>
+
+                            <!-- Nút hành động -->
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary btn-lg flex-grow-1">
+                                    <i class="bi bi-check-circle"></i> Xác Nhận Mượn
+                                </button>
+                                <a href="/" class="btn btn-secondary btn-lg">Quay Lại</a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Quy định mượn sách -->
+                <div class="card mt-4 border-info">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">ℹ️ Quy Định Mượn Sách</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="mb-0">
+                            <li>Thẻ độc giả phải hoạt động (ACTIVE) và chưa hết hạn</li>
+                            <li>Mỗi lần mượn tối đa 3 cuốn</li>
+                            <li>Thời hạn mượn: 14 ngày (có thể gia hạn tối đa 7 ngày)</li>
+                            <li>Nếu trễ hạn, sẽ tính phí phạt 5.000₫/cuốn/ngày</li>
+                            <li>Sách bị mất hoặc hỏng phải bồi thường theo giá sách</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function selectBook(element) {
+            // Bỏ selection class khỏi tất cả item
+            document.querySelectorAll('.book-item').forEach(item => {
+                item.classList.remove('selected');
+            });
+            // Thêm selection class vào item được click
+            element.classList.add('selected');
+            // Gán giá trị bookId từ data attribute
+            const bookId = element.getAttribute('data-book-id');
+            document.getElementById('bookId').value = bookId;
+        }
+    </script>
+</body>
+</html>

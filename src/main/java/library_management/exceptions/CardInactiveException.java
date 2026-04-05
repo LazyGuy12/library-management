@@ -12,4 +12,8 @@ public class CardInactiveException extends BorrowingException {
             "CARD_INACTIVE"
         );
     }
+    
+    public CardInactiveException(String message) {
+        super(message, "CARD_INACTIVE");
+    }
 }

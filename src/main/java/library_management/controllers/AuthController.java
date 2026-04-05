@@ -29,13 +29,15 @@ public class AuthController {
     public String register(@ModelAttribute User user) {
         // 1. Mã hóa mật khẩu
         user.setPassword(encoder.encode(user.getPassword()));
+        
+        // 2. Gán vai trò USER (người dùng thường - có thẻ độc giả)
         user.setRole("USER");
         
-        // 2. Tự động tạo IdCard: LIB-2026-MSSV
+        // 3. Tự động tạo IdCard: LIB-2026-MSSV (chỉ tạo cho USER)
         String cardId = "LIB-" + LocalDate.now().getYear() + "-" + user.getMssv();
         user.setIdCard(cardId);
         
-        // 3. Hạn dùng 1 năm & Trạng thái hoạt động
+        // 4. Hạn dùng 1 năm & Trạng thái hoạt động
         user.setExpiryDate(LocalDate.now().plusYears(1));
         user.setStatus("ACTIVE");
         

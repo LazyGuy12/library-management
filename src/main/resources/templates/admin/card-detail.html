@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" 
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security" lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chi Tiết Thẻ Độc Giả</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .card-box { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border-radius: 10px; padding: 30px; margin-bottom: 20px; }
+        .card-box h3 { font-size: 14px; opacity: 0.8; margin-bottom: 10px; }
+        .card-box .value { font-size: 24px; font-weight: bold; }
+        .fine-item { background: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ffc107; }
+        .fine-status { display: inline-block; padding: 5px 10px; border-radius: 5px; font-size: 12px; font-weight: bold; }
+        .pending { background: #f8d7da; color: #721c24; }
+        .paid { background: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+    <div th:replace="fragments/header :: navbar"></div>
+
+    <div class="container mt-5 mb-5">
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <!-- Header -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="text-white fw-bold">
+                        <i class="bi bi-credit-card me-2"></i>Chi Tiết Thẻ Độc Giả
+                    </h2>
+                    <a href="/admin/cards" class="btn btn-light">
+                        <i class="bi bi-arrow-left me-1"></i>Quay Lại
+                    </a>
+                </div>
+
+                <!-- Thông báo -->
+                <div th:if="${success}" class="alert alert-success alert-dismissible fade show">
+                    <i class="bi bi-check-circle me-2"></i>
+                    <span th:text="${success}"></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+
+                <!-- Thẻ Độc Giả -->
+                <div class="card shadow-lg mb-4 border-0" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-body p-0">
+                        <!-- Card Design giống home.html -->
+                        <div style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 40px;">
+                            <div class="d-flex justify-content-between align-items-start mb-4">
+                                <div>
+                                    <h6 class="text-uppercase mb-2 opacity-75 small">Library Card - Quản Lý</h6>
+                                    <h4 class="fw-bold mb-0" th:text="${user.fullName}">KHIEM NGUYEN</h4>
+                                </div>
+                                <i class="bi bi-qr-code fs-1 opacity-50"></i>
+                            </div>
+
+                            <!-- Card ID Box -->
+                            <div class="bg-white bg-opacity-15 p-3 rounded mb-4 text-center">
+                                <small class="d-block opacity-75 text-uppercase mb-1">Mã Thẻ</small>
+                                <code class="fw-bold fs-5" th:text="${user.idCard}">LIB-2026-XXXX</code>
+                            </div>
+
+                            <!-- Info Grid -->
+                            <div class="row text-center small mb-2">
+                                <div class="col-6">
+                                    <span class="opacity-75 d-block text-uppercase mb-1">MSSV</span>
+                                    <span class="fw-bold fs-5" th:text="${user.mssv}">210xxx</span>
+                                </div>
+                                <div class="col-6">
+                                    <span class="opacity-75 d-block text-uppercase mb-1">HẠN DÙNG</span>
+                                    <span class="fw-bold fs-5" th:text="${#temporals.format(user.expiryDate, 'dd/MM/yyyy')}">01/01/2027</span>
+                                </div>
+                            </div>
+
+                            <!-- Status & Renewal -->
+                            <hr class="my-3 bg-white opacity-25">
+                            <div class="row small">
+                                <div class="col-6">
+                                    <span class="opacity-75 d-block text-uppercase mb-1">TRẠNG THÁI</span>
+                                    <span th:if="${user.status == 'ACTIVE'}" class="badge bg-success">● Hoạt động</span>
+                                    <span th:if="${user.status == 'EXPIRED'}" class="badge bg-danger">● Hết hạn</span>
+                                    <span th:if="${user.status == 'SUSPENDED'}" class="badge bg-warning text-dark">● Bị khóa</span>
+                                </div>
+                                <div class="col-6 text-end">
+                                    <span class="opacity-75 d-block text-uppercase mb-1">Gia hạn</span>
+                                    <span class="fw-bold" th:text="${user.renewalCount} + ' lần'">0 lần</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gia Hạn Button -->
+                        <div class="p-4">
+                            <form th:action="@{/admin/cards/{userId}/renew(userId=${user.id})}" method="post">
+                                <button type="submit" class="btn btn-success w-100 fw-bold" 
+                                        onclick="return confirm('Gia hạn thẻ cho 1 năm?')">
+                                    <i class="bi bi-arrow-repeat me-2"></i>Gia Hạn Thẻ (1 Năm)
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phiếu Phạt -->
+                <div class="card shadow">
+                    <div class="card-header bg-danger text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-exclamation-triangle me-2"></i>Phiếu Phạt Chưa Thanh Toán
+                        </h5>
+                    </div>
+
+                    <div class="card-body">
+                        <div th:if="${pendingFines.isEmpty()}" class="alert alert-success">
+                            <i class="bi bi-check-circle me-2"></i>
+                            <strong>Không có phiếu phạt chưa thanh toán</strong>
+                        </div>
+
+                        <div th:if="${not pendingFines.isEmpty()}">
+                            <!-- Tổng tiền phạt -->
+                            <div class="alert alert-warning mb-3">
+                                <h6 class="mb-2"><i class="bi bi-currency-dollar me-2"></i>TỔNG TIỀN PHẠT</h6>
+                                <div style="font-size: 28px; font-weight: bold; color: #d32f2f;">
+                                    <span th:text="'₫' + ${#numbers.formatInteger(totalPendingFine, 0)}"></span>
+                                </div>
+                            </div>
+
+                            <!-- Danh sách phiếu phạt -->
+                            <div th:each="fine : ${pendingFines}" class="fine-item">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="mb-1" th:text="${fine.fineType == 'LATE_FEE' ? '📅 Phí Phạt Quá Hạn' : '❌ Phí Phạt Khác'}"></h6>
+                                        <small class="text-muted">
+                                            Ngày tạo: <span th:text="${#temporals.format(fine.createdDate, 'dd/MM/yyyy')}"></span>
+                                        </small>
+                                    </div>
+                                    <div style="font-size: 20px; font-weight: bold; color: #d32f2f;">
+                                        <span th:text="'₫' + ${#numbers.formatInteger(fine.amount, 0)}"></span>
+                                    </div>
+                                </div>
+                                <p class="text-muted small mb-2" th:text="${fine.reason}"></p>
+                                <div class="d-flex justify-content-between">
+                                    <span class="fine-status pending">CHƯA THANH TOÁN</span>
+                                    <form th:action="@{/admin/cards/fine/{fineId}/pay(fineId=${fine.id})}" method="post" style="display:inline;">
+                                        <button type="submit" class="btn btn-sm btn-success" 
+                                                onclick="return confirm('Xác nhận đã thanh toán?')">
+                                            <i class="bi bi-check me-1"></i>Đã Thanh Toán
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

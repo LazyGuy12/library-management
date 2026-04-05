@@ -68,7 +68,7 @@
                 <a th:href="@{/admin/borrow-history}" class="list-group-item list-group-item-action py-3">
                     <i class="bi bi-journal-check me-2 text-success"></i> Quản lý mượn sách
                 </a>
-                <a th:href="@{/admin/users}" class="list-group-item list-group-item-action py-3">
+                <a th:href="@{/admin/cards}" class="list-group-item list-group-item-action py-3">
                     <i class="bi bi-people me-2 text-info"></i> Quản lý độc giả (Thẻ)
                 </a>
             </div>
@@ -125,6 +125,14 @@
     </div>
 
     <div class="container">
+        <!-- Notification về trạng thái thẻ -->
+        <div th:if="${cardNotification}" 
+             th:class="'alert alert-' + ${cardNotificationType} + ' alert-dismissible fade show'"
+             role="alert">
+            <span th:text="${cardNotification}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
         <div class="row">
             <div class="col-12 text-center mb-4">
                 <h2 class="fw-bold"><i class="bi bi-collection me-2 text-primary"></i>KHÁM PHÁ KHO SÁCH</h2>
@@ -147,11 +155,16 @@
                                 <div class="d-flex justify-content-between align-items-center">
                                     <span class="small fw-bold" th:classappend="${book.quantity > 0 ? 'text-success' : 'text-danger'}" 
                                           th:text="'Còn: ' + ${book.quantity}"></span>
-                                    <a th:href="@{/admin/borrow-book/{id}(id=${book.id})}" 
-                                       class="btn btn-sm btn-primary px-3 rounded-pill shadow-sm" 
-                                       th:classappend="${book.quantity <= 0 ? 'disabled' : ''}"
-                                       th:onclick="${book.quantity <= 0} ? 'return false' : ''"
+                                    <a th:if="${book.quantity > 0}" 
+                                       th:href="@{/borrowing/borrow-form}"
+                                       onclick="document.getElementById('selectedBookId').value='[[ ${book.id} ]]'; alert('Vui lòng chọn sách từ danh sách'); return false;"
+                                       class="btn btn-sm btn-primary px-3 rounded-pill shadow-sm"
                                        th:text="'Mượn sách'"></a>
+                                    <button th:if="${book.quantity <= 0}" 
+                                            type="button"
+                                            class="btn btn-sm btn-secondary px-3 rounded-pill shadow-sm disabled"
+                                            disabled
+                                            th:text="'Hết sách'"></button>
                                 </div>
                             </div>
                         </div>

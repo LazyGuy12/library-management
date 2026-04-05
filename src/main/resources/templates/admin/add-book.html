@@ -19,6 +19,18 @@
         .offcanvas-body::-webkit-scrollbar { width: 5px; }
         .offcanvas-body::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 10px; }
         body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important; min-height: 100vh; }
+        
+        /* Style cho hàng sách clickable */
+        .book-row {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .book-row:hover {
+            background-color: #f0f4ff !important;
+            transform: translateX(4px);
+            box-shadow: inset 4px 0 0 #0d6efd;
+        }
     </style>
 </head>
 <body>
@@ -134,7 +146,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr th:each="b : ${books}">
+                        <tr th:each="b : ${books}" class="book-row" th:data-book-id="${b.id}">
                             <td>
                                 <img th:src="${b.imageUrl != null ? b.imageUrl : 'https://via.placeholder.com/50'}" 
                                      style="width: 50px; height: 70px; object-fit: cover;" class="rounded shadow-sm">
@@ -146,14 +158,14 @@
                                 <span th:class="${b.quantity > 0 ? 'badge bg-success' : 'badge bg-danger'}" 
                                       th:text="${b.quantity}"></span>
                             </td>
-                            <td class="text-center">
-                                <div class="btn-group shadow-sm">
+                            <td class="text-center" onclick="event.stopPropagation()">
+                                <div class="d-flex gap-2 justify-content-center">
                                     <a th:href="@{/admin/edit-book/{id}(id=${b.id})}" class="btn btn-sm btn-warning">Sửa</a>
                                     <a th:href="@{/admin/delete-book/{id}(id=${b.id})}" 
                                        class="btn btn-sm btn-danger" 
-                                       onclick="return confirm('Xác nhận xóa cuốn sách này?')">Xóa</a>
+                                       onclick="event.stopPropagation(); return confirm('Xác nhận xóa cuốn sách này?')">Xóa</a>
                                     
-                                    <a th:if="${b.quantity > 0}" th:href="@{/admin/quick-borrow/{id}(id=${b.id})}" class="btn btn-sm btn-success text-white" title="Mượn sách">
+                                    <a th:if="${b.quantity > 0}" th:href="@{/admin/quick-borrow/{id}(id=${b.id})}" class="btn btn-sm btn-success text-white" title="Mượn sách" onclick="event.stopPropagation();">
                                         <i class="bi bi-bookmark-plus me-1"></i>Mượn
                                     </a>
                                     <span th:if="${b.quantity <= 0}" class="btn btn-sm btn-secondary disabled" title="Hết sách">
@@ -171,5 +183,23 @@
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Xử lý click vào hàng sách để chuyển sang trang chi tiết
+        document.querySelectorAll('.book-row').forEach(row => {
+            row.addEventListener('click', function(e) {
+                // Nếu click vào nút action, bỏ qua
+                if (e.target.closest('.btn-group') || e.target.closest('.btn')) {
+                    return;
+                }
+                
+                // Lấy book ID từ data attribute
+                const bookId = this.getAttribute('data-book-id');
+                if (bookId) {
+                    window.location.href = '/book/' + bookId;
+                }
+            });
+        });
+    </script>
 </body>
 </html>

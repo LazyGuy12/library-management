@@ -83,9 +83,27 @@
                 <!-- Bảng lịch sử mượn sách -->
                 <div class="card card-custom">
                     <div class="card-header bg-light p-4 border-bottom">
-                        <h5 class="mb-0">
+                        <h5 class="mb-3">
                             <i class="bi bi-list me-2 text-primary"></i>Danh Sách Giao Dịch Mượn Sách
                         </h5>
+                        <!-- Search and date filter -->
+                        <div class="row g-2" th:if="${not #lists.isEmpty(loans)}">
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
+                                    <input type="text" id="searchInput" class="form-control border-0" placeholder="Tìm kiếm theo tên sách, tác giả...">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white border-0"><i class="bi bi-calendar-event text-primary"></i></span>
+                                    <input type="date" id="filterDate" class="form-control border-0" placeholder="Lọc theo ngày mượn">
+                                    <button class="btn btn-outline-secondary" type="button" id="clearDateBtn" title="Xóa bộ lọc ngày">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Thông báo: Chưa có giao dịch -->
@@ -111,11 +129,11 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr th:each="loan, iter : ${loans}">
+                                <tr th:each="loan, iter : ${loans}" class="loan-row">
                                     <td class="text-center fw-bold text-primary" th:text="${iter.count}">1</td>
-                                    <td class="fw-bold" th:text="${loan.bookTitle}">Book Title</td>
-                                    <td th:text="${loan.bookAuthor}">Author</td>
-                                    <td><code th:text="${loan.bookCode}">ISBN</code></td>
+                                    <td class="fw-bold book-title-value" th:text="${loan.bookTitle}">Book Title</td>
+                                    <td class="book-author-value" th:text="${loan.bookAuthor}">Author</td>
+                                    <td><code class="book-code-value" th:text="${loan.bookCode}">ISBN</code></td>
                                     <td class="text-center">
                                         <i class="bi bi-calendar2 me-1"></i>
                                         <span th:text="${#temporals.format(loan.appointmentTime, 'dd/MM/yyyy HH:mm')}">01/01/2026 14:00</span>
@@ -187,5 +205,53 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function filterRows() {
+            let searchTerm = document.getElementById('searchInput')?.value.toLowerCase() || '';
+            let filterDate = document.getElementById('filterDate')?.value || '';
+            let rows = document.querySelectorAll('.loan-row');
+            
+            rows.forEach(row => {
+                // Search filter
+                let bookTitle = row.querySelector('.book-title-value')?.textContent.toLowerCase() || '';
+                let bookAuthor = row.querySelector('.book-author-value')?.textContent.toLowerCase() || '';
+                let bookCode = row.querySelector('.book-code-value')?.textContent.toLowerCase() || '';
+                
+                let matchesSearch = bookTitle.includes(searchTerm) || bookAuthor.includes(searchTerm) || bookCode.includes(searchTerm);
+                
+                // Date filter (check appointment date column - index 4)
+                let dateCells = row.querySelectorAll('td');
+                let dateCell = dateCells[4]; // Ngày Đặt Lịch column
+                let appointmentDate = dateCell?.textContent.trim().split(' ')[0]; // Extract date part (dd/MM/yyyy)
+                let matchesDate = true;
+                
+                if (filterDate) {
+                    // Convert filter date (YYYY-MM-DD) to dd/MM/yyyy format
+                    let [year, month, day] = filterDate.split('-');
+                    let formattedFilterDate = `${day}/${month}/${year}`;
+                    matchesDate = appointmentDate === formattedFilterDate;
+                }
+                
+                // Show only if matches both search and date
+                if (matchesSearch && matchesDate) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+        
+        // Event listeners (only if elements exist)
+        let searchInput = document.getElementById('searchInput');
+        let filterDate = document.getElementById('filterDate');
+        let clearDateBtn = document.getElementById('clearDateBtn');
+        
+        if (searchInput) searchInput.addEventListener('keyup', filterRows);
+        if (filterDate) filterDate.addEventListener('change', filterRows);
+        if (clearDateBtn) clearDateBtn.addEventListener('click', function() {
+            filterDate.value = '';
+            filterRows();
+        });
+    </script>
 </body>
 </html>

@@ -19,6 +19,7 @@ public class Book {
     private String imageUrl;        // URL ảnh bìa
     private int quantity;           // Số lượng (đã bị deprecated, dùng status thay thế)
     private String isbn;            // Mã ISBN
+    private String description;     // Mô tả sách
     
     // Trạng thái của cuốn sách (AVAILABLE: có sẵn, BORROWED: đang mượn)
     // Default là AVAILABLE khi tạo sách mới

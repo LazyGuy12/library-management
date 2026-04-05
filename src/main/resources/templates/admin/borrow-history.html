@@ -124,6 +124,14 @@
                                            onclick="return confirm('Xác nhận khách hàng đã lấy sách?')">
                                             <i class="bi bi-check2"></i> Nhận
                                         </a>
+                                        <button th:if="${loan.status == 'PENDING'}" 
+                                               type="button"
+                                               class="btn btn-danger"
+                                               data-bs-toggle="modal"
+                                               th:data-bs-target="'#cancelModal-' + ${loan.loanId}"
+                                               title="Hủy đặt lịch">
+                                            <i class="bi bi-x-lg"></i> Hủy
+                                        </button>
                                         <a th:if="${loan.status == 'PICKED_UP'}" 
                                            th:href="@{/admin/{loanId}/return(loanId=${loan.loanId})}"
                                            class="btn btn-warning"
@@ -136,6 +144,35 @@
                                            title="Xem chi tiết">
                                             <i class="bi bi-eye"></i>
                                         </a>
+                                    </div>
+
+                                    <!-- Modal hủy đặt lịch -->
+                                    <div class="modal fade" th:id="'cancelModal-' + ${loan.loanId}" tabindex="-1">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header bg-danger text-white">
+                                                    <h5 class="modal-title">Hủy Đặt Lịch Mượn</h5>
+                                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                </div>
+                                                <form th:action="@{/admin/{loanId}/cancel(loanId=${loan.loanId})}" method="post">
+                                                    <div class="modal-body">
+                                                        <p class="mb-3">
+                                                            <strong>Sách:</strong> <span th:text="${loan.bookTitle}"></span><br>
+                                                            <strong>Độc giả:</strong> <span th:text="${loan.readerName}"></span>
+                                                        </p>
+                                                        <div class="mb-0">
+                                                            <label class="form-label fw-bold">Lý do hủy:</label>
+                                                            <textarea name="cancelReason" class="form-control" rows="3" required 
+                                                                      placeholder="Nhập lý do hủy (vd: User trễ giờ, Sách hỏng, etc...)"></textarea>
+                                                        </div>
+                                                    </div>
+                                                    <div class="modal-footer">
+                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                                                        <button type="submit" class="btn btn-danger">Xác Nhận Hủy</button>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>

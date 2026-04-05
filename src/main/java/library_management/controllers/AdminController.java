@@ -341,4 +341,71 @@ public class AdminController {
         }
         return "redirect:/admin/borrow-history";
     }
+
+    /**
+     * Hủy đặt lịch mượn (Admin)
+     * POST /admin/{loanId}/cancel
+     */
+    @PostMapping("/{loanId}/cancel")
+    public String cancelBorrow(@PathVariable String loanId,
+                              @RequestParam String cancelReason,
+                              RedirectAttributes attributes) {
+        try {
+            borrowingService.cancelBorrow(loanId, cancelReason);
+            attributes.addFlashAttribute("borrowSuccess", "✅ Hủy đặt lịch thành công!");
+        } catch (Exception e) {
+            attributes.addFlashAttribute("borrowError", "❌ Lỗi: " + e.getMessage());
+        }
+        return "redirect:/admin/borrow-history";
+    }
+
+    /**
+     * TEST ENDPOINT: Tạo dữ liệu test cho notification
+     * GET /admin/test/create-notifications
+     * Tạo: thẻ hết hạn + 1 sách mượn quá hạn cho user login
+     */
+    @GetMapping("/test/create-notifications")
+    public String createTestNotifications(Principal principal, RedirectAttributes attributes) {
+        if (principal == null) {
+            attributes.addFlashAttribute("error", "Cần đăng nhập");
+            return "redirect:/login";
+        }
+        
+        try {
+            // Lấy user hiện tại (để tạo notification cho user này)
+            Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+            if (!userOpt.isPresent()) {
+                attributes.addFlashAttribute("error", "User không tìm thấy");
+                return "redirect:/admin/add-book";
+            }
+            
+            User testUser = userOpt.get();
+            
+            // 1. Set card hết hạn (ngày hôm qua)
+            testUser.setExpiryDate(LocalDate.now().minusDays(1));
+            userRepository.save(testUser);
+            
+            // 2. Tạo 1 sách mượn quá hạn (trạng thái PICKED_UP, hạn trả hôm qua)
+            Optional<Book> bookOpt = bookRepository.findAll().stream().findFirst();
+            if (bookOpt.isPresent()) {
+                Book book = bookOpt.get();
+                Loan overdueLoan = Loan.builder()
+                    .bookId(book.getId())
+                    .userId(testUser.getId())
+                    .appointmentTime(LocalDate.now().minusDays(10).atStartOfDay())
+                    .borrowDate(LocalDate.now().minusDays(10))
+                    .dueDate(LocalDate.now().minusDays(2))  // Quá hạn 2 ngày
+                    .status(library_management.models.LoanStatus.PICKED_UP)
+                    .quantity(1)
+                    .build();
+                loanRepository.save(overdueLoan);
+            }
+            
+            attributes.addFlashAttribute("success", "✅ Tạo test data thành công! Vào /user/notifications để kiểm tra");
+        } catch (Exception e) {
+            attributes.addFlashAttribute("error", "❌ Lỗi: " + e.getMessage());
+        }
+        
+        return "redirect:/admin/add-book";
+    }
 }

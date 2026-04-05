@@ -18,12 +18,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import library_management.models.Book;
 import library_management.models.Loan;
+import library_management.models.LoanStatus;
+import library_management.models.Notification;
 import library_management.models.User;
 import library_management.dto.LoanHistoryDTO;
 import library_management.exceptions.BorrowingException;
 import library_management.repository.UserRepository;
 import library_management.repository.BookRepository;
 import library_management.repository.LoanRepository;
+import library_management.repository.NotificationRepository;
 import library_management.services.BorrowingService;
 
 /**
@@ -44,6 +47,9 @@ public class UserController {
     
     @Autowired
     private LoanRepository loanRepository;
+    
+    @Autowired
+    private NotificationRepository notificationRepository;
     
     @Autowired
     private BorrowingService borrowingService;
@@ -258,5 +264,123 @@ public class UserController {
             attributes.addFlashAttribute("error", "❌ Lỗi: " + e.getMessage());
             return "redirect:/user/borrow?bookId=" + bookId;
         }
+    }
+
+    /**
+     * Xem tất cả notifications của user (từ database)
+     * Đánh dấu tất cả thành đã đọc
+     * GET /user/notifications
+     */
+    @GetMapping("/notifications")
+    public String viewNotifications(Principal principal, Model model) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+        if (!userOpt.isPresent()) {
+            return "redirect:/login";
+        }
+        
+        User user = userOpt.get();
+        model.addAttribute("user", user);
+        
+        // Lấy tất cả notifications từ database, sắp xếp mới nhất trước
+        List<Notification> dbNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+        
+        // Mark all as read
+        for (Notification notif : dbNotifications) {
+            if (!notif.isRead()) {
+                notif.setRead(true);
+                notificationRepository.save(notif);
+            }
+        }
+        
+        // Convert để template dùng
+        List<java.util.Map<String, Object>> notifications = new java.util.ArrayList<>();
+        for (Notification notif : dbNotifications) {
+            java.util.Map<String, Object> notifMap = new java.util.HashMap<>();
+            notifMap.put("id", notif.getId());
+            notifMap.put("type", notif.getType());
+            notifMap.put("title", notif.getTitle());
+            notifMap.put("message", notif.getMessage());
+            notifMap.put("reason", notif.getReason());
+            notifMap.put("isRead", notif.isRead());
+            notifMap.put("createdAt", notif.getCreatedAt() != null 
+                ? notif.getCreatedAt().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"))
+                : "N/A");
+            
+            java.util.Map<String, String> data = new java.util.HashMap<>();
+            if ("CANCEL_BORROW".equals(notif.getType())) {
+                data.put("reason", notif.getReason() != null ? notif.getReason() : "Không có lý do");
+                data.put("bookTitle", "Sách không xác định");
+                if (notif.getBookId() != null) {
+                    Optional<Book> bookOpt = bookRepository.findById(notif.getBookId());
+                    if (bookOpt.isPresent()) {
+                        data.put("bookTitle", bookOpt.get().getTitle());
+                    }
+                }
+            }
+            notifMap.put("data", data);
+            notifications.add(notifMap);
+        }
+        
+        model.addAttribute("notifications", notifications);
+        model.addAttribute("notificationCount", 0); // Đã mark as read hết nên count = 0
+        
+        return "user/notifications";
+    }
+    
+    /**
+     * Xóa một notification
+     * POST /user/notifications/{notificationId}/delete
+     */
+    @PostMapping("/notifications/{notificationId}/delete")
+    public String deleteNotification(@PathVariable String notificationId, 
+                                    Principal principal,
+                                    RedirectAttributes attributes) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        try {
+            Optional<Notification> notifOpt = notificationRepository.findById(notificationId);
+            if (notifOpt.isPresent()) {
+                Notification notif = notifOpt.get();
+                Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+                if (userOpt.isPresent() && notif.getUserId().equals(userOpt.get().getId())) {
+                    notificationRepository.deleteById(notificationId);
+                }
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        
+        return "redirect:/user/notifications";
+    }
+    
+    /**
+     * Xóa all notifications của user
+     * POST /user/notifications/delete-all
+     */
+    @PostMapping("/notifications/delete-all")
+    public String deleteAllNotifications(Principal principal, RedirectAttributes attributes) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        try {
+            Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                List<Notification> userNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
+                notificationRepository.deleteAll(userNotifications);
+                attributes.addFlashAttribute("success", "✅ Xóa tất cả thông báo thành công");
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        
+        return "redirect:/user/notifications";
     }
 }

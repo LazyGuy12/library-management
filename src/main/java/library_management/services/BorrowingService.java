@@ -5,6 +5,7 @@ import library_management.exceptions.*;
 import library_management.repository.BookRepository;
 import library_management.repository.FineRepository;
 import library_management.repository.LoanRepository;
+import library_management.repository.NotificationRepository;
 import library_management.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,6 +52,9 @@ public class BorrowingService {
     
     @Autowired
     private FineRepository fineRepository;
+    
+    @Autowired
+    private NotificationRepository notificationRepository;
     
     // ===================== NEW FLOW =====================
     
@@ -194,6 +198,25 @@ public class BorrowingService {
         book.setQuantity(book.getQuantity() + loan.getQuantity());
         book.setStatus("AVAILABLE");
         bookRepository.save(book);
+        
+        // Tạo notification cho user
+        try {
+            Notification notification = Notification.builder()
+                .userId(loan.getUserId())
+                .type("CANCEL_BORROW")
+                .title("Lệnh Mượn Sách Bị Hủy")
+                .message("Lệnh mượn sách '" + book.getTitle() + "' đã bị hủy")
+                .reason(cancelReason)
+                .loanId(loanId)
+                .bookId(loan.getBookId())
+                .isRead(false)
+                .createdAt(LocalDateTime.now())
+                .actionUrl("/user/borrow-history")
+                .build();
+            notificationRepository.save(notification);
+        } catch (Exception e) {
+            logger.error("Lỗi khi tạo notification cho cancel borrow: {}", e.getMessage());
+        }
         
         logger.warn("🚫 Loan CANCELLED: {} | Reason: {}", loanId, cancelReason);
         

@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import library_management.models.Book;
 import library_management.repository.FineRepository;
 import library_management.repository.UserRepository;
 import library_management.repository.BookRepository;
@@ -64,5 +66,26 @@ public class HomeController {
         // Thêm danh sách sách vào model để hiển thị trên trang home
         model.addAttribute("books", bookRepository.findAll());
         return "home"; // Trả về file home.html
+    }
+
+    @GetMapping("/book/{id}")
+    public String bookDetail(@PathVariable String id, Model model, Principal principal) {
+        // Lấy chi tiết cuốn sách
+        Book book = bookRepository.findById(id).orElse(null);
+        if (book == null) {
+            return "redirect:/"; // Nếu không tìm thấy, quay lại trang chủ
+        }
+        
+        model.addAttribute("book", book);
+        
+        // Lấy thông tin user nếu đã đăng nhập
+        if (principal != null) {
+            String currentMssv = principal.getName();
+            userRepository.findByMssv(currentMssv).ifPresent(user -> {
+                model.addAttribute("user", user);
+            });
+        }
+        
+        return "book-detail"; // Trả về file book-detail.html
     }
 }

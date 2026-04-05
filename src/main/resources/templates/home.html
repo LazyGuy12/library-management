@@ -145,28 +145,32 @@
             <div class="col-lg-10">
                 <div class="row" id="book-container">
                     <div th:each="book : ${books}" class="col-md-4 mb-4">
-                        <div class="card h-100 shadow-sm book-card border-0">
-                            <img th:src="${book.imageUrl != null ? book.imageUrl : 'https://via.placeholder.com/300x400?text=No+Image'}" 
-                                 class="book-img shadow-sm" alt="Bìa sách">
-                            <div class="card-body">
-                                <h5 class="card-title text-primary fw-bold mb-1 small" th:text="${book.title}"></h5>
-                                <p class="card-text text-muted mb-2 small"><i class="bi bi-person me-1"></i><span th:text="${book.author}"></span></p>
-                                <span class="badge bg-light text-secondary border mb-3 small" th:text="${book.category}"></span>
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span class="small fw-bold" th:classappend="${book.quantity > 0 ? 'text-success' : 'text-danger'}" 
-                                          th:text="'Còn: ' + ${book.quantity}"></span>
-                                    <a th:if="${book.quantity > 0}" 
-                                       th:href="@{/user/borrow(bookId=${book.id})}"
-                                       class="btn btn-sm btn-primary px-3 rounded-pill shadow-sm"
-                                       th:text="'Mượn sách'"></a>
-                                    <button th:if="${book.quantity <= 0}" 
-                                            type="button"
-                                            class="btn btn-sm btn-secondary px-3 rounded-pill shadow-sm disabled"
-                                            disabled
-                                            th:text="'Hết sách'"></button>
+                        <a th:href="@{/book/{id}(id=${book.id})}" class="text-decoration-none">
+                            <div class="card h-100 shadow-sm book-card border-0" style="cursor: pointer;">
+                                <img th:src="${book.imageUrl != null ? book.imageUrl : 'https://via.placeholder.com/300x400?text=No+Image'}" 
+                                     class="book-img shadow-sm" alt="Bìa sách">
+                                <div class="card-body">
+                                    <h5 class="card-title text-primary fw-bold mb-1 small" th:text="${book.title}"></h5>
+                                    <p class="card-text text-muted mb-2 small"><i class="bi bi-person me-1"></i><span th:text="${book.author}"></span></p>
+                                    <span class="badge bg-light text-secondary border mb-3 small" th:text="${book.category}"></span>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="small fw-bold" th:classappend="${book.quantity > 0 ? 'text-success' : 'text-danger'}" 
+                                              th:text="'Còn: ' + ${book.quantity}"></span>
+                                        <a th:if="${book.quantity > 0}" 
+                                           th:href="@{/user/borrow(bookId=${book.id})}"
+                                           class="btn btn-sm btn-primary px-3 rounded-pill shadow-sm"
+                                           th:text="'Mượn sách'"
+                                           sec:authorize="hasRole('USER')"
+                                           onclick="event.stopPropagation();"></a>
+                                        <button th:if="${book.quantity <= 0}" 
+                                                type="button"
+                                                class="btn btn-sm btn-secondary px-3 rounded-pill shadow-sm disabled"
+                                                disabled
+                                                th:text="'Hết sách'"></button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        </a>
                     </div>
                     <div th:if="${#lists.isEmpty(books)}" class="col-12">
                         <div class="alert alert-info text-center" role="alert">

@@ -30,20 +30,27 @@ public class Loan {
     // ID của người dùng mượn sách
     private String userId;
     
-    // Ngày mượn
+    // Thời gian user chọn để lên thư viện nhận sách (appointment)
+    // Lúc này sách -1 quantity, tính từ đây dueDate = appointmentTime + 14 ngày
+    private LocalDateTime appointmentTime;
+    
+    // Ngày mượn (= appointmentTime.toLocalDate() khi admin click "Đã lấy")
     private LocalDate borrowDate;
     
-    // Ngày hẹn trả (theo quy định 14 ngày)
+    // Ngày hẹn trả (= appointmentTime + 14 ngày)
     private LocalDate dueDate;
     
     // Ngày thực tế trả lại (null nếu chưa trả)
     private LocalDate returnDate;
     
-    // Trạng thái: ACTIVE (chưa trả), RETURNED (đã trả)
-    private String status; // "ACTIVE" hoặc "RETURNED"
+    // Trạng thái: PENDING (chờ nhận), PICKED_UP (đã lấy), RETURNED (đã trả), CANCELLED (hủy)
+    private LoanStatus status;
     
-    // Số tiền phạt (nếu quá hạn)
-    private int lateFee;
+    // Lý do hủy đặt lịch (nếu status = CANCELLED)
+    private String cancelReason;
+    
+    // Số tiền phạt (nếu quá hạn), tính từ dueDate
+    private long lateFee;
     
     // Số lượng sách mượn
     private int quantity;

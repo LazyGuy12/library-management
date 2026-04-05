@@ -1,4 +1,382 @@
-# 🧪 Hướng Dẫn Test Chức Năng Thẻ Độc Giả Hết Hạn & Quá Hạn Trả Sách
+# 🧪 Hướng Dẫn Test - Nghiệp Vụ Mượn Sách (Appointment-Based Flow)
+
+## ⚡ Quick Start (5 phút)
+
+### **Bước 1: Enable Test Data**
+
+Mở file: `src/main/resources/application-dev.properties`
+```properties
+app.test-endpoints.enabled=true
+```
+
+### **Bước 2: Chạy app với dev profile**
+
+```bash
+# PowerShell (Windows)
+$env:SPRING_PROFILES_ACTIVE="dev"
+./mvnw.cmd spring-boot:run
+
+# Bash (macOS/Linux)
+export SPRING_PROFILES_ACTIVE=dev
+./mvnw spring-boot:run
+```
+
+### **Bước 3: Test data tự động được tạo**
+
+```
+✅ Created 3 test books
+✅ Created user HET_HAN_THE (expired card)
+✅ Created user QUA_HAN (overdue loan + fine)
+✅ Ready to test!
+```
+
+---
+
+## 📋 Flow Mượn Sách (Appointment-Based)
+
+### **Quy Trình Mới:**
+
+```
+1️⃣ USER ĐẶT LỊCH
+   ↓
+   POST /borrowing/request-borrow
+   - Chọn sách
+   - Chọn appointmentTime (ngày + giờ lên thư viện)
+   - Loan status = PENDING
+   - Book quantity -1
+   - dueDate = appointmentTime + 14 ngày
+   
+2️⃣ ADMIN XÁC NHẬN ĐÃ LẤY
+   ↓
+   POST /borrowing/{loanId}/pickup
+   - Loan status = PENDING → PICKED_UP
+   - borrowDate = hôm nay
+   - dueDate vẫn giữ (từ appointmentTime)
+   
+3️⃣ USER TRẢ SÁCH
+   ↓
+   POST /borrowing/{loanId}/return
+   - Loan status = PICKED_UP → RETURNED
+   - returnDate = hôm nay
+   - If returnDate > dueDate:
+     - Tính phí = (days overdue) × quantity × 5.000₫
+     - Tạo Fine (PENDING)
+     - Suspend card (User.status = SUSPENDED)
+   - Book quantity +1
+```
+
+---
+
+## 🎯 Test Scenarios
+
+### **Scenario 1: User Hết Hạn Thẻ**
+
+**Dữ liệu test:**
+```
+MSSV: HET_HAN_THE
+Mật khẩu: password123
+Thẻ: LIB-2026-EXPIRED-001
+Status: EXPIRED (5 ngày trước)
+```
+
+**Kiểm tra:**
+1. Login: http://localhost:8080/login
+2. Vào `/borrowing/borrow-form` → ⚠️ Cảnh báo "Thẻ hết hạn"
+3. Không thể đặt lịch mượn (button disabled)
+4. Vào `/admin/cards` → Thẻ status = EXPIRED (vàng)
+
+---
+
+### **Scenario 2: Đặt Lịch Mượn (PENDING)**
+
+**Bước 1: User đặt lịch**
+- Login: http://localhost:8080/login (USER bất kỳ)
+- Vào `/borrowing/borrow-form`
+- Chọn sách (vd: "Java Programming")
+- Chọn appointmentTime: **05/04/2026 14:00**
+- Nhấn "Đặt Lịch Mượn"
+- ✅ Success: "Đặt lịch mượn 'Java Programming' thành công! Hẹn lấy: 05/04/2026 14:00 | Hạn trả: 19/04/2026"
+
+**Kiểm tra Database:**
+```javascript
+db.loans.findOne()
+// {
+//   "status": "PENDING",      // Chờ nhận sách
+//   "appointmentTime": ISODate("2026-04-05T14:00:00Z"),
+//   "dueDate": ISODate("2026-04-19"),   // 14 ngày sau
+//   "borrowDate": null,       // Chưa có
+//   "returnDate": null
+// }
+
+db.books.findOne({title: "Java Programming"})
+// {
+//   "quantity": 2            // Đã -1 (từ 3)
+// }
+```
+
+---
+
+### **Scenario 3: Admin Xác Nhận Đã Lấy (PENDING → PICKED_UP)**
+
+**Bước 1: Xem danh sách loans**
+- Admin vào: `/admin/borrow-history`
+- Thấy danh sách tất cả loans (PENDING, PICKED_UP, RETURNED, CANCELLED)
+- Status: **"PENDING"** (chờ nhận)
+- appointmentTime: **05/04/2026 14:00**
+
+**Bước 2: Admin click "Đã Lấy Sách"**
+- Click button **"Đã Lấy Sách"** trên dòng PENDING loan
+- ✅ Status thay đổi: **PENDING → PICKED_UP**
+- ✅ borrowDate được set = hôm nay (05/04/2026)
+- dueDate vẫn = 19/04/2026
+
+**Kiểm tra Database:**
+```javascript
+db.loans.findOne({status: "PICKED_UP"})
+// {
+//   "status": "PICKED_UP",
+//   "borrowDate": ISODate("2026-04-05"),
+//   "dueDate": ISODate("2026-04-19"),
+//   "appointmentTime": ISODate("2026-04-05T14:00:00Z")
+// }
+```
+
+---
+
+### **Scenario 4: User Trả Sách (Đúng Hạn)**
+
+**Bước 1: User trả sách**
+- Login: User đã mượn sách
+- Vào `/user/borrow-history`
+- Thấy sách status = **"PICKED_UP"**
+- Click "Trả Sách"
+- ✅ Thành công: "Trả sách thành công!"
+
+**Kiểm tra:**
+```javascript
+db.loans.findOne({status: "RETURNED"})
+// {
+//   "status": "RETURNED",
+//   "returnDate": ISODate("2026-04-05"),
+//   "lateFee": 0              // Không quá hạn
+// }
+
+db.books.findOne({title: "Java Programming"})
+// {
+//   "quantity": 3             // Cộng lại
+// }
+```
+
+---
+
+### **Scenario 5: User Trả Sách (QUÁ HẠN) ⚠️**
+
+**Dữ liệu test:**
+```
+MSSV: QUA_HAN
+appointmentTime: 22/10/2026 14:00 (thời gian tự chọn)
+dueDate: 05/11/2026
+returnDate: hôm nay (05/04/2026) → 152 ngày quá hạn!
+```
+
+**Bước 1: Admin đặt lịch mượn chiều đó (test)**
+- Chạy curl hoặc tạo loan with **appointmentTime = 22/10/2026**
+- dueDate sẽ là **05/11/2026**
+
+**Bước 2: Hôm nay (05/04/2026) return book**
+- POST `/user/{loanId}/return`
+- ✅ Quá hạn: 152 ngày
+- ✅ Phí phạt: **152 × 5.000 = 760.000₫**
+- ✅ Tạo Fine (PENDING)
+- ✅ Thẻ SUSPENDED
+
+**Kiểm tra Database:**
+```javascript
+db.loans.findOne({status: "RETURNED"})
+// {
+//   "status": "RETURNED",
+//   "returnDate": ISODate("2026-04-05"),
+//   "lateFee": 760000         // Quá hạn 152 ngày
+// }
+
+db.fines.findOne({userId: "..."})
+// {
+//   "status": "PENDING",
+//   "amount": 760000,
+//   "reason": "Quá hạn trả sách: 152 ngày, mức phạt 5000 đ/cuốn/ngày"
+// }
+
+db.users.findOne({mssv: "QUA_HAN"})
+// {
+//   "status": "SUSPENDED"     // Bị khóa
+// }
+```
+
+**Bước 3: Admin xác nhận thanh toán**
+- Vào `/admin/cards` → Tìm user QUA_HAN
+- Status = **SUSPENDED** (đỏ)
+- Click "Xem chi tiết"
+- Thấy phiếu phạt 760.000₫
+- Click "Đã Thanh Toán"
+- ✅ Fine status = PAID
+- ✅ User status = ACTIVE (mở khóa)
+
+---
+
+### **Scenario 6: Admin Hủy Đặt Lịch (PENDING/PICKED_UP → CANCELLED)**
+
+**Bước 1: User đặt lịch nhưng không đến**
+- Loan status = PENDING
+- Book quantity -1
+
+**Bước 2: Admin hủy**
+- Admin vào `/admin/borrow-history`
+- Click "Hủy Đặt Lịch" trên PENDING loan
+- Nhập lý do: "Người dùng không đến lên thư viện"
+- ✅ Status = CANCELLED
+- ✅ Book quantity +1 (hoàn lại)
+
+**Kiểm tra:**
+```javascript
+db.loans.findOne({status: "CANCELLED"})
+// {
+//   "status": "CANCELLED",
+//   "cancelReason": "Người dùng không đến lên thư viện"
+// }
+
+db.books.findOne({title: "Java Programming"})
+// {
+//   "quantity": 3             // Hoàn lại
+// }
+```
+
+---
+
+### **Scenario 7: Max 3 Cuốn Mượn**
+
+**Kiểm tra giới hạn:**
+
+**Bước 1: User thứ 1 - Đặt 3 cuốn**
+- Đặt lịch: Java Programming (PENDING)
+- Đặt lịch: Spring in Action (PENDING)
+- Đặt lịch: Clean Code (PENDING)
+- ✅ Tất cả thành công
+
+**Bước 2: Thứ 4 thì bị lỗi**
+- Cố đặt lịch cuốn thứ 4
+- ❌ Error: "Bạn đã mượn tối đa 3 cuốn!"
+
+**Quy tắc:**
+- Count loans with status = PENDING hoặc PICKED_UP
+- Nếu totalActive ≥ 3 → Không cho đặt thêm
+
+---
+
+## 🔄 Trạng Thái Loan Chi Tiết
+
+| Status | Ý Nghĩa | Có thể trả? | Có thể hủy? |
+|--------|---------|------------|-----------|
+| **PENDING** | Chờ nhận sách tại thư viện | ❌ Không | ✅ Có |
+| **PICKED_UP** | Admin xác nhận đã lấy sách | ✅ Có | ⚠️ Có (nếu chưa quá hạn) |
+| **RETURNED** | Đã trả sách | ❌ Không được | ❌ Không |
+| **CANCELLED** | Hủy đặt lịch | ❌ Không | ❌ Không |
+
+---
+
+## 💳 Quản Lý Thẻ Độc Giả
+
+### **Trạng Thái Thẻ:**
+- **ACTIVE**: Hoạt động, có thể mượn sách
+- **EXPIRED**: Hết hạn, không thể mượn. Cần gia hạn tại `/admin/cards`
+- **SUSPENDED**: Bị khóa do có phiếu phạt chưa thanh toán. Admin phải xác nhận thanh toán để mở khóa
+
+### **Gia Hạn Thẻ:**
+- Thêm 365 ngày
+- Endpoint: `POST /admin/cards/{userId}/renew`
+
+### **Xác Nhận Thanh Toán Phạt:**
+- Admin vào `/admin/cards/{userId}`
+- Thấy danh sách phiếu phạt (nếu có PENDING)
+- Click "Đã Thanh Toán" trên phiếu
+- ✅ Fine status = PAID
+- ✅ Nếu tất cả fines PAID → User status = ACTIVE
+
+---
+
+## 🧪 Manual Test với API (Optional)
+
+Nếu muốn test bypass UI:
+
+### **Create test user:**
+```bash
+POST /api/test/user-expire?days=0
+# Response: user với thẻ EXPIRED
+```
+
+### **Create overdue loan:**
+```bash
+POST /api/test/overdue-loan?mssv=TEST123&bookId=book1&days=7
+# Response: Loan PENDING với appointmentTime đã set
+```
+
+---
+
+## ⚠️ Lưu Ý Quan Trọng
+
+| Điểm | Chi tiết |
+|-----|---------|
+| **borrowDate** | ❌ NOT set khi PENDING. Chỉ set khi PICKED_UP (admin click) |
+| **dueDate** | ✅ Set luôn = appointmentTime + 14 ngày (PENDING lúc) |
+| **Phí muộn** | Tính từ **dueDate**, không phải borrowDate |
+| **Max loans** | Tính PENDING + PICKED_UP, không bao gồm RETURNED/CANCELLED |
+| **Thẻ bị khóa** | Khi có Fine PENDING, tự động SUSPENDED |
+
+---
+
+## 📊 Database Collections
+
+### **loans**
+- appointmentTime (LocalDateTime): thời gian user chọn lên nhận
+- borrowDate (LocalDate): null → set khi admin click "Đã lấy"
+- dueDate (LocalDate): = appointmentTime + 14 ngày
+- status (LoanStatus): PENDING → PICKED_UP → RETURNED
+- cancelReason (String): nếu status = CANCELLED
+
+### **users**
+- status: ACTIVE / EXPIRED / SUSPENDED
+- expiryDate (LocalDate): hạn dùng thẻ
+
+### **fines**
+- status: PENDING → PAID
+- amount: 5.000₫/cuốn/ngày
+- createdDate: lúc return book quá hạn
+
+---
+
+## 🔒 Production Safety
+
+**Test endpoints CHỈ hoạt động khi:**
+1. `app.test-endpoints.enabled=true` 
+2. Profile = `dev`
+
+**Production (default):**
+- `app.test-endpoints.enabled=false`
+- Test endpoints DISABLED
+- ✅ An toàn 100%
+
+---
+
+**Updated:** April 5, 2026  
+**Version:** 2.0 (Appointment-Based Booking Flow)
+
+**Thay đổi chính từ v1.0 → v2.0:**
+- ✅ User đặt lịch (PENDING) thay vì mượn ngay
+- ✅ appointmentTime + dueDate được tính chính xác
+- ✅ Admin xác nhận "Đã lấy" (PICKED_UP)
+- ✅ Max 3 cuốn (PENDING + PICKED_UP)
+- ✅ Hỗ trợ cancel with reason
+- ✅ LoanStatus enum cho 4 trạng thái
+
 
 ## ⚡ Quick Start (2 phút)
 

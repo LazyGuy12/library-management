@@ -4,11 +4,11 @@ import library_management.models.Book;
 import library_management.models.Loan;
 import library_management.models.User;
 import library_management.dto.LoanHistoryDTO;
-import library_management.exceptions.BorrowingException;
 import library_management.repository.BookRepository;
 import library_management.repository.UserRepository;
 import library_management.repository.LoanRepository;
 import library_management.services.BorrowingService;
+import library_management.exceptions.BorrowingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -135,111 +135,34 @@ public class AdminController {
 
     /**
      * Hiển thị form mượn sách với nhập mã thẻ, ngày trả, số lượng
-     * 
-     * @param bookId ID của cuốn sách cần mượn
-     * @param model Model để gửi dữ liệu về view
-     * @return View form mượn sách
+     * ⚠️ DEPRECATED: Use /borrowing/borrow-form instead (appointment-based)
      */
     @GetMapping("/borrow-form/{id}")
     public String showBorrowForm(@PathVariable("id") String bookId, Model model, Principal principal) {
-        // Lấy thông tin sách
-        Book book = bookRepository.findById(bookId)
-            .orElseThrow(() -> new RuntimeException("Không tìm thấy sách"));
-        
-        // Kiểm tra sách còn số lượng không
-        if (book.getQuantity() <= 0) {
-            model.addAttribute("error", "Sách này hiện không có sẵn để mượn (hết sách)");
-        }
-        
-        model.addAttribute("book", book);
-        
-        // Ngày hạn trả mặc định: 14 ngày từ hôm nay
-        LocalDate defaultDueDate = LocalDate.now().plusDays(14);
-        model.addAttribute("defaultDueDate", defaultDueDate);
-        
-        // Thêm thông tin user để hiển thị trên sidebar
-        if (principal != null) {
-            Optional<User> userOpt = userRepository.findByMssv(principal.getName());
-            if (userOpt.isPresent()) {
-                model.addAttribute("user", userOpt.get());
-            }
-        }
-        
-        return "admin/borrow-book";
-    }
-
-    /**
-     * Lưu thông tin mượn sách từ form
-     * 
-     * @param bookId ID sách
-     * @param idCard Mã thẻ độc giả
-     * @param dueDate Ngày hạn trả
-     * @param quantity Số lượng
-     * @param attributes Flash attributes cho redirect
-     * @return Redirect về trang lịch sử mượn hoặc về form nếu lỗi
-     */
-    @PostMapping("/save-borrow")
-    public String saveBorrow(
-            @RequestParam String bookId,
-            @RequestParam String idCard,
-            @RequestParam LocalDate dueDate,
-            @RequestParam int quantity,
-            RedirectAttributes attributes) {
-        
-        try {
-            logger.info("🔍 Gọi BorrowingService.borrowBookWithDetails()...");
-            // Gọi service mượn sách với chi tiết
-            Loan loan = borrowingService.borrowBookWithDetails(bookId, idCard, dueDate, quantity);
-            
-            logger.info("✅ Mượn sách thành công! Loan ID: {}, Due Date: {}", loan.getId(), loan.getDueDate());
-            
-            // Mượn thành công
-            attributes.addFlashAttribute("borrowSuccess",
-                "✅ Mượn sách thành công! Hạn trả: " + loan.getDueDate() + 
-                ". Vui lòng quay sách đúng hạn để tránh bị phạt.");
-            
-        } catch (BorrowingException e) {
-            // Lỗi từ logic mượn
-            logger.warn("⚠️ BorrowingException: {}", e.getMessage());
-            attributes.addFlashAttribute("borrowError", e.getMessage());
-            return "redirect:/admin/borrow-form/" + bookId;
-            
-        } catch (Exception e) {
-            // Lỗi không mong muốn - In full stacktrace
-            logger.error("❌ Exception không mong muốn khi mượn sách!", e);
-            attributes.addFlashAttribute("borrowError", 
-                "Có lỗi xảy ra: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
-            return "redirect:/admin/borrow-form/" + bookId;
-        }
-        
-        return "redirect:/admin/borrow-history";
+        model.addAttribute("error", "❌ Chương trình mượn sách đã được nâng cấp! Vui lòng dùng tính năng 'Đặt Lịch Mượn' trong menu người dùng.");
+        return "redirect:/borrowing/borrow-form";
     }
 
     /**
      * Xem lịch sử mượn sách của toàn bộ thư viện (dành cho Admin)
-     * 
-     * @param principal Thông tin người dùng đăng nhập
-     * @param model Model
-     * @return View lịch sử mượn
+     * Hiển thị tất cả loans (PENDING, PICKED_UP, RETURNED, CANCELLED)
      */
     @GetMapping("/borrow-history")
     public String viewBorrowHistory(Principal principal, Model model) {
         
-        // Kiểm tra đăng nhập
         if (principal == null) {
             return "redirect:/login";
         }
         
-        // Thêm thông tin user để hiển thị trên sidebar
         Optional<User> userOpt = userRepository.findByMssv(principal.getName());
         if (userOpt.isPresent()) {
             model.addAttribute("user", userOpt.get());
         }
         
-        // Lấy TẤT CẢ loans trong thư viện (không chỉ của user hiện tại)
+        // Lấy tất cả loans
         List<Loan> allLoans = loanRepository.findAll();
         
-        // Convert sang DTO để hiển thị (lấy thông tin sách và user)
+        // Convert sang DTO
         List<LoanHistoryDTO> loanDTOs = allLoans.stream()
             .map(loan -> {
                 Book book = bookRepository.findById(loan.getBookId()).orElse(null);
@@ -255,11 +178,13 @@ public class AdminController {
                     .readerMssv(user != null ? user.getMssv() : "Unknown")
                     .readerExpiryDate(user != null ? user.getExpiryDate() : null)
                     .readerStatus(user != null ? user.getStatus() : "UNKNOWN")
+                    .appointmentTime(loan.getAppointmentTime())
                     .borrowDate(loan.getBorrowDate())
                     .dueDate(loan.getDueDate())
                     .returnDate(loan.getReturnDate())
-                    .status(loan.getStatus())
+                    .status(loan.getStatus() != null ? loan.getStatus().toString() : "UNKNOWN")
                     .lateFee(loan.getLateFee())
+                    .cancelReason(loan.getCancelReason())
                     .build();
             })
             .collect(Collectors.toList());
@@ -270,16 +195,11 @@ public class AdminController {
     
     /**
      * Xem chi tiết một giao dịch mượn sách
-     * 
-     * @param loanId ID bản ghi mượn
-     * @param model Model
-     * @return View chi tiết
      */
     @GetMapping("/borrow-detail/{loanId}")
     public String viewLoanDetail(@PathVariable String loanId, Model model, Principal principal) {
         
         try {
-            // Thêm thông tin user để hiển thị trên sidebar
             if (principal != null) {
                 Optional<User> userOpt = userRepository.findByMssv(principal.getName());
                 if (userOpt.isPresent()) {
@@ -287,19 +207,15 @@ public class AdminController {
                 }
             }
             
-            // Lấy loan từ DB
             Loan loan = loanRepository.findById(loanId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bản ghi mượn"));
             
-            // Lấy thông tin sách
             Book book = bookRepository.findById(loan.getBookId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy sách"));
             
-            // Lấy thông tin người mượn
             User user = userRepository.findById(loan.getUserId())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người mượn"));
             
-            // Tạo DTO chi tiết
             LoanHistoryDTO detail = LoanHistoryDTO.builder()
                 .loanId(loan.getId())
                 .bookTitle(book.getTitle())
@@ -310,11 +226,13 @@ public class AdminController {
                 .readerMssv(user.getMssv())
                 .readerExpiryDate(user.getExpiryDate())
                 .readerStatus(user.getStatus())
+                .appointmentTime(loan.getAppointmentTime())
                 .borrowDate(loan.getBorrowDate())
                 .dueDate(loan.getDueDate())
                 .returnDate(loan.getReturnDate())
-                .status(loan.getStatus())
+                .status(loan.getStatus() != null ? loan.getStatus().toString() : "UNKNOWN")
                 .lateFee(loan.getLateFee())
+                .cancelReason(loan.getCancelReason())
                 .build();
             
             model.addAttribute("loanDetail", detail);
@@ -327,31 +245,100 @@ public class AdminController {
     }
 
     /**
-     * Trả sách
-     * 
-     * @param loanId ID bản ghi mượn
-     * @param attributes Flash attributes
-     * @return Redirect về lịch sử
+     * Xác nhận lấy sách - chuyển từ PENDING → PICKED_UP, set borrowDate = today
+     * GET /admin/{loanId}/pickup
      */
-    @GetMapping("/return-book/{loanId}")
-    public String returnBook(
-            @PathVariable String loanId,
-            RedirectAttributes attributes) {
-        
+    @GetMapping("/{loanId}/pickup")
+    public String confirmPickup(@PathVariable String loanId, RedirectAttributes attributes) {
         try {
-            // Lấy loan từ DB
-            Loan loan = loanRepository.findById(loanId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy bản ghi mượn"));
+            borrowingService.pickupBook(loanId);
+            attributes.addFlashAttribute("borrowSuccess", "✅ Xác nhận lấy sách thành công!");
+        } catch (Exception e) {
+            attributes.addFlashAttribute("borrowError", "❌ Lỗi: " + e.getMessage());
+        }
+        return "redirect:/admin/borrow-history";
+    }
+
+    /**
+     * Form mượn nhanh - Admin nhập MSSV để mượn sách cho khách hàng đến trực tiếp
+     * GET /admin/quick-borrow/{bookId}
+     */
+    @GetMapping("/quick-borrow/{bookId}")
+    public String showQuickBorrowForm(@PathVariable String bookId, Model model, Principal principal) {
+        try {
+            if (principal != null) {
+                Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+                if (userOpt.isPresent()) {
+                    model.addAttribute("user", userOpt.get());
+                }
+            }
             
-            // Gọi service trả sách
-            borrowingService.returnBook(loanId, loan.getBookId());
+            Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy sách"));
             
-            attributes.addFlashAttribute("borrowSuccess", "✅ Trả sách thành công!");
+            model.addAttribute("book", book);
+            return "admin/borrow-book";
             
         } catch (Exception e) {
-            attributes.addFlashAttribute("borrowError", "Lỗi khi trả sách: " + e.getMessage());
+            return "redirect:/admin/add-book?error=" + e.getMessage();
+        }
+    }
+
+    /**
+     * Xử lý mượn nhanh - Admin xử lý mượn sách cho khách hàng đến trực tiếp
+     * POST /admin/quick-borrow/{bookId}
+     */
+    @PostMapping("/quick-borrow/{bookId}")
+    public String processQuickBorrow(@PathVariable String bookId,
+                                     @RequestParam String idCard,
+                                     @RequestParam String dueDate,
+                                     RedirectAttributes attributes) {
+        try {
+            User user = userRepository.findByIdCard(idCard)
+                .orElseThrow(() -> new BorrowingException("Không tìm thấy độc giả với mã thẻ: " + idCard, "USER_NOT_FOUND"));
+            
+            // Check card status
+            if (user.getStatus() == null || !user.getStatus().equals("ACTIVE")) {
+                String errorMsg = "EXPIRED".equals(user.getStatus()) 
+                    ? "Thẻ độc giả đã hết hạn" 
+                    : "SUSPENDED".equals(user.getStatus())
+                    ? "Thẻ độc giả bị khóa"
+                    : "Thẻ độc giả không hoạt động";
+                throw new BorrowingException("❌ " + errorMsg, "INVALID_CARD_STATUS");
+            }
+            
+            LocalDate dueDateObj = LocalDate.parse(dueDate);
+            Loan loan = borrowingService.quickBorrow(user.getId(), bookId, dueDateObj);
+            
+            Book book = bookRepository.findById(bookId).orElse(null);
+            String bookTitle = book != null ? book.getTitle() : "Sách không xác định";
+            
+            attributes.addFlashAttribute("borrowSuccess", 
+                String.format("✅ Mượn sách thành công!\nSách: %s\nHạn trả: %s", 
+                    bookTitle, 
+                    loan.getDueDate().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))));
+            
+        } catch (BorrowingException e) {
+            attributes.addFlashAttribute("borrowError", "❌ " + e.getMessage());
+        } catch (Exception e) {
+            attributes.addFlashAttribute("borrowError", "❌ Lỗi: " + e.getMessage());
         }
         
+        return "redirect:/admin/add-book";
+    }
+
+    /**
+     * Trả sách (Admin)
+     * GET /admin/{loanId}/return
+     */
+    @GetMapping("/{loanId}/return")
+    public String returnBook(@PathVariable String loanId, RedirectAttributes attributes) {
+        try {
+            borrowingService.returnBook(loanId);
+            attributes.addFlashAttribute("borrowSuccess", "✅ Trả sách thành công!");
+        } catch (Exception e) {
+            attributes.addFlashAttribute("borrowError", "❌ Lỗi khi trả sách: " + e.getMessage());
+        }
         return "redirect:/admin/borrow-history";
     }
 }

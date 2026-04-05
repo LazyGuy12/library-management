@@ -70,9 +70,10 @@
                         </div>
 
                         <div class="card-body p-4">
-                            <form method="post" th:action="@{/user/request-borrow}" onsubmit="return validateForm()">
+                            <form method="post" th:action="@{/user/borrow}" onsubmit="return validateForm()">
                                 <!-- Hidden bookId -->
                                 <input type="hidden" name="bookId" th:value="${book.id}">
+                                <input type="hidden" name="dueDate" id="hiddenDueDate">
                                 
                                 <!-- Chọn Thời Gian Nhận Sách -->
                                 <div class="appointment-section">
@@ -80,17 +81,33 @@
                                         📌 Chọn ngày + giờ để lên thư viện nhận sách
                                     </label>
                                     <p class="text-muted small mb-3">
-                                        Hạn trả: 14 ngày tính từ thời gian này. Phí muộn: 5.000₫/cuốn/ngày
+                                        Phí muộn: 5.000₫/cuốn/ngày nếu trả quá hạn
                                     </p>
                                     
                                     <input type="datetime-local" name="appointmentTime" class="form-control" 
                                            id="appointmentTime" required min="">
+                                </div>
+
+                                <!-- Chọn Ngày Hạn Trả -->
+                                <div class="appointment-section">
+                                    <label class="form-label fw-bold">
+                                        📅 Chọn ngày hạn trả (tối đa 14 ngày)
+                                    </label>
+                                    <p class="text-muted small mb-3">
+                                        Ngày hạn trả không được quá 14 ngày từ thời gian lên nhận sách
+                                    </p>
                                     
-                                    <div class="mt-3 p-3 bg-white rounded" id="dueDatePreview" style="display:none;">
+                                    <input type="date" name="userDueDate" class="form-control" 
+                                           id="userDueDate" required>
+                                    
+                                    <div class="mt-3 p-3 bg-white rounded">
                                         <small class="text-muted d-block mb-2">
-                                            📅 Hạn trả dự kiến:
+                                            📅 Hạn trả đã chọn:
                                         </small>
-                                        <strong id="dueDateDisplay" style="font-size: 18px; color: #667eea;"></strong>
+                                        <strong id="dueDateDisplay" style="font-size: 18px; color: #667eea;">Chưa chọn</strong>
+                                        <small class="text-danger d-block mt-2" id="dueDateWarning" style="display:none;">
+                                            ⚠️ Ngày hạn trả không được vượt quá 14 ngày!
+                                        </small>
                                     </div>
                                 </div>
 
@@ -112,7 +129,7 @@
                 <div th:if="${user != null && user.status == 'EXPIRED'}" class="warning-box">
                     <i class="bi bi-exclamation-triangle me-2"></i>
                     <strong>⚠️ Thẻ độc giả hết hạn!</strong> Bạn không thể đặt lịch mượn sách.
-                    <a href="/user/cards" class="btn btn-sm btn-warning ms-2">Gia hạn thẻ</a>
+                    <a href="/" class="btn btn-sm btn-warning ms-2">Gia hạn thẻ</a>
                 </div>
 
                 <div th:if="${user != null && user.status == 'SUSPENDED'}" class="error-box">
@@ -129,46 +146,115 @@
         // Set minimum date/time to now
         document.addEventListener('DOMContentLoaded', function() {
             const appointmentInput = document.getElementById('appointmentTime');
+            const dueDateInput = document.getElementById('userDueDate');
+            
             if (appointmentInput) {
                 const now = new Date();
                 now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
                 appointmentInput.min = now.toISOString().slice(0, 16);
                 appointmentInput.value = now.toISOString().slice(0, 16);
+                
+                // Set initial dueDate to today
+                const today = new Date();
+                today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+                dueDateInput.value = today.toISOString().slice(0, 10);
+                
                 updateDueDate();
             }
         });
 
-        // Update due date preview when appointment time changes
+        // Update due date validation when appointment time changes
         const appointmentInput = document.getElementById('appointmentTime');
         if (appointmentInput) {
             appointmentInput.addEventListener('change', function() {
+                updateDateLimits();
                 updateDueDate();
             });
         }
 
-        function updateDueDate() {
+        // Update due date display when due date changes
+        const dueDateInput = document.getElementById('userDueDate');
+        if (dueDateInput) {
+            dueDateInput.addEventListener('change', function() {
+                updateDueDate();
+            });
+        }
+
+        function updateDateLimits() {
             const appointmentInput = document.getElementById('appointmentTime');
+            const dueDateInput = document.getElementById('userDueDate');
+            
             if (appointmentInput && appointmentInput.value) {
                 const appointmentDate = new Date(appointmentInput.value);
-                const dueDate = new Date(appointmentDate);
-                dueDate.setDate(dueDate.getDate() + 14);
+                const maxDueDate = new Date(appointmentDate);
+                maxDueDate.setDate(maxDueDate.getDate() + 14);
                 
-                const dueDateStr = dueDate.toLocaleDateString('vi-VN', {
+                const dueDateStr = maxDueDate.toISOString().slice(0, 10);
+                dueDateInput.max = dueDateStr;
+                
+                // Set default dueDate to max date
+                dueDateInput.value = dueDateStr;
+            }
+        }
+
+        function updateDueDate() {
+            const dueDateInput = document.getElementById('userDueDate');
+            const hiddenDueDate = document.getElementById('hiddenDueDate');
+            const appointmentInput = document.getElementById('appointmentTime');
+            
+            if (dueDateInput && dueDateInput.value && appointmentInput && appointmentInput.value) {
+                const appointmentDate = new Date(appointmentInput.value);
+                const selectedDueDate = new Date(dueDateInput.value);
+                const maxDueDate = new Date(appointmentDate);
+                maxDueDate.setDate(maxDueDate.getDate() + 14);
+                
+                // Format dueDate as DD/MM/YYYY
+                const dueDateStr = selectedDueDate.toLocaleDateString('vi-VN', {
                     year: 'numeric',
                     month: '2-digit',
                     day: '2-digit'
                 });
                 
                 document.getElementById('dueDateDisplay').textContent = dueDateStr;
-                document.getElementById('dueDatePreview').style.display = 'block';
+                hiddenDueDate.value = dueDateInput.value;
+                
+                // Check if dueDate exceeds max
+                if (selectedDueDate > maxDueDate) {
+                    document.getElementById('dueDateWarning').style.display = 'block';
+                    dueDateInput.classList.add('is-invalid');
+                } else {
+                    document.getElementById('dueDateWarning').style.display = 'none';
+                    dueDateInput.classList.remove('is-invalid');
+                }
             }
         }
 
         function validateForm() {
             const appointmentTime = document.getElementById('appointmentTime').value;
+            const userDueDate = document.getElementById('userDueDate').value;
             
             if (!appointmentTime) {
-                alert('❌ Vui lòng chọn thời gian!');
+                alert('❌ Vui lòng chọn thời gian nhận sách!');
+                return false;
+            }
+            
+            if (!userDueDate) {
+                alert('❌ Vui lòng chọn ngày hạn trả!');
+                return false;
+            }
+            
+            const appointmentDate = new Date(appointmentTime);
+            const selectedDueDate = new Date(userDueDate);
+            const maxDueDate = new Date(appointmentDate);
+            maxDueDate.setDate(maxDueDate.getDate() + 14);
+            
+            if (selectedDueDate > maxDueDate) {
+                alert('❌ Ngày hạn trả không được vượt quá 14 ngày từ thời gian nhận sách!');
+                return false;
+            }
+            
+            if (selectedDueDate < appointmentDate) {
+                alert('❌ Ngày hạn trả phải sau ngày nhận sách!');
                 return false;
             }
             

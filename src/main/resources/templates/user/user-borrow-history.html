@@ -103,9 +103,9 @@
                                     <th>Tên Sách</th>
                                     <th>Tác Giả</th>
                                     <th>Mã ISBN</th>
-                                    <th class="text-center">Số Lượng</th>
-                                    <th>Ngày Mượn</th>
-                                    <th>Hạn Trả</th>
+                                    <th class="text-center">Ngày Đặt Lịch</th>
+                                    <th class="text-center">Ngày Mượn</th>
+                                    <th class="text-center">Hạn Trả</th>
                                     <th class="text-center">Trạng Thái</th>
                                     <th class="text-center">Hành Động</th>
                                 </tr>
@@ -117,16 +117,32 @@
                                     <td th:text="${loan.bookAuthor}">Author</td>
                                     <td><code th:text="${loan.bookCode}">ISBN</code></td>
                                     <td class="text-center">
-                                        <span class="badge bg-info" th:text="${loan.quantity}">1</span>
+                                        <i class="bi bi-calendar2 me-1"></i>
+                                        <span th:text="${#temporals.format(loan.appointmentTime, 'dd/MM/yyyy HH:mm')}">01/01/2026 14:00</span>
                                     </td>
-                                    <td th:text="${#temporals.format(loan.borrowDate, 'dd/MM/yyyy')}">01/01/2026</td>
-                                    <td th:text="${#temporals.format(loan.dueDate, 'dd/MM/yyyy')}">01/02/2026</td>
                                     <td class="text-center">
-                                        <span th:if="${loan.status == 'ACTIVE'}" class="badge bg-warning text-dark">
-                                            <i class="bi bi-hourglass-split me-1"></i>Chưa Trả
+                                        <span th:if="${loan.borrowDate != null}">
+                                            <i class="bi bi-calendar me-1"></i>
+                                            <span th:text="${#temporals.format(loan.borrowDate, 'dd/MM/yyyy')}">01/01/2026</span>
+                                        </span>
+                                        <span th:if="${loan.borrowDate == null}" class="text-muted fst-italic">Chưa nhận</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <i class="bi bi-calendar-check me-1"></i>
+                                        <span th:text="${#temporals.format(loan.dueDate, 'dd/MM/yyyy')}">01/02/2026</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span th:if="${loan.status == 'PENDING'}" class="badge bg-warning text-dark">
+                                            <i class="bi bi-hourglass-split me-1"></i>Chờ Nhận Sách
+                                        </span>
+                                        <span th:if="${loan.status == 'PICKED_UP'}" class="badge bg-info text-white">
+                                            <i class="bi bi-book me-1"></i>Đang Mượn
                                         </span>
                                         <span th:if="${loan.status == 'RETURNED'}" class="badge bg-success">
                                             <i class="bi bi-check-circle me-1"></i>Đã Trả
+                                        </span>
+                                        <span th:if="${loan.status == 'CANCELLED'}" class="badge bg-danger">
+                                            <i class="bi bi-x-circle me-1"></i>Đã Hủy
                                         </span>
                                     </td>
                                     <td class="text-center">
@@ -155,7 +171,7 @@
                         <div class="card card-custom text-center p-4">
                             <i class="bi bi-hourglass-split fs-2 text-warning mb-2"></i>
                             <h6 class="text-muted mb-1">Sách chưa trả</h6>
-                            <h3 class="text-warning" th:text="${#lists.size(loans.?[status == 'ACTIVE'])}">0</h3>
+                            <h3 class="text-warning" th:text="${#lists.size(loans.?[status == 'PICKED_UP'])}">0</h3>
                         </div>
                     </div>
                     <div class="col-md-4">

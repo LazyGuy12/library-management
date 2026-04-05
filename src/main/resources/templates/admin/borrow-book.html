@@ -51,10 +51,7 @@
                         </div>
 
                         <!-- Form mượn sách -->
-                        <form th:action="@{/admin/save-borrow}" method="post">
-                            <!-- Hidden field: bookId -->
-                            <input type="hidden" name="bookId" th:value="${book.id}">
-
+                        <form th:action="@{/admin/quick-borrow/{bookId}(bookId=${book.id})}" method="post">
                             <!-- Mã thẻ độc giả -->
                             <div class="mb-3">
                                 <label class="form-label fw-bold">
@@ -63,11 +60,11 @@
                                 <input type="text" 
                                        name="idCard" 
                                        class="form-control form-control-lg" 
-                                       placeholder="Nhập mã thẻ độc giả của bạn (ví dụ: LIB-2026-2280601489)"
+                                       placeholder="Nhập mã thẻ độc giả (ví dụ: LIB-2026-2280601489)"
                                        required
                                        autofocus>
                                 <small class="text-muted d-block mt-1">
-                                    💡 Mã thẻ là mã thẻ độc giả được cấp khi đăng ký tài khoản
+                                    💡 Mã thẻ là mã độc giả được cấp khi đăng ký tài khoản
                                 </small>
                             </div>
 
@@ -79,27 +76,10 @@
                                 <input type="date" 
                                        name="dueDate" 
                                        class="form-control form-control-lg"
-                                       th:value="${defaultDueDate}"
+                                       id="adminDueDate"
                                        required>
                                 <small class="text-muted d-block mt-1">
-                                    ⏰ Mặc định: 14 ngày từ hôm nay
-                                </small>
-                            </div>
-
-                            <!-- Số lượng sách -->
-                            <div class="mb-4">
-                                <label class="form-label fw-bold">
-                                    <i class="bi bi-stack me-1 text-warning"></i>Số Lượng
-                                </label>
-                                <input type="number" 
-                                       name="quantity" 
-                                       class="form-control form-control-lg"
-                                       value="1"
-                                       min="1"
-                                       th:max="${book.quantity}"
-                                       required>
-                                <small class="text-muted d-block mt-1">
-                                    📚 Tối đa 3 cuốn/lần mượn
+                                    ⏰ Chọn ngày trả sách (mặc định: 14 ngày từ hôm nay)
                                 </small>
                             </div>
 
@@ -122,10 +102,25 @@
                             <ul class="mb-0 ps-3">
                                 <li>Thẻ độc giả phải <strong>ACTIVE</strong> và <strong>chưa hết hạn</strong></li>
                                 <li>Bạn chỉ được mượn <strong>tối đa 3 cuốn</strong></li>
-                                <li>Hạn trả mặc định là <strong>14 ngày</strong></li>
+                                <li>Hạn trả: <strong>tối đa 14 ngày</strong> từ hôm nay</li>
                                 <li>Nếu quá hạn, sẽ bị <strong>phạt tiền</strong></li>
                             </ul>
                         </div>
+
+                    <script>
+                        // Set default dueDate to 14 days from today
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const today = new Date();
+                            const defaultDate = new Date(today);
+                            defaultDate.setDate(defaultDate.getDate() + 14);
+                            const dateStr = defaultDate.toISOString().split('T')[0];
+                            const maxDate = dateStr;
+                            
+                            const dueDateInput = document.getElementById('adminDueDate');
+                            dueDateInput.value = dateStr;
+                            dueDateInput.max = dateStr;
+                        });
+                    </script>
                     </div>
                 </div>
             </div>

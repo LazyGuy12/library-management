@@ -153,7 +153,7 @@
                                        class="btn btn-sm btn-danger" 
                                        onclick="return confirm('Xác nhận xóa cuốn sách này?')">Xóa</a>
                                     
-                                    <a th:if="${b.quantity > 0}" th:href="@{/admin/borrow-form/{id}(id=${b.id})}" class="btn btn-sm btn-success text-white" title="Mượn sách">
+                                    <a th:if="${b.quantity > 0}" th:href="@{/admin/quick-borrow/{id}(id=${b.id})}" class="btn btn-sm btn-success text-white" title="Mượn sách">
                                         <i class="bi bi-bookmark-plus me-1"></i>Mượn
                                     </a>
                                     <span th:if="${b.quantity <= 0}" class="btn btn-sm btn-secondary disabled" title="Hết sách">

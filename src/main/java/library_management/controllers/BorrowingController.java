@@ -2,6 +2,7 @@ package library_management.controllers;
 
 import library_management.models.Book;
 import library_management.models.Loan;
+import library_management.models.LoanStatus;
 import library_management.models.User;
 import library_management.exceptions.BorrowingException;
 import library_management.repository.BookRepository;
@@ -15,16 +16,21 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.security.Principal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * MVC Controller xử lý các yêu cầu mượn sách
+ * MVC Controller xử lý mượn sách - APPOINTMENT BASED FLOW
+ * 
  * Endpoints:
- * - GET /borrowing/borrow-form : Hiển thị form mượn sách
- * - POST /borrowing/borrow : Mượn sách
- * - POST /borrowing/return/{loanId} : Trả sách
+ * - GET /borrowing/borrow-form : Form đặt lịch mượn sách (chọn sách + appointment time)
+ * - POST /borrowing/request-borrow : Tạo Loan PENDING
+ * - POST /borrowing/{loanId}/pickup : Admin xác nhận đã lấy (PENDING → PICKED_UP)
+ * - POST /borrowing/{loanId}/cancel : Hủy đặt lịch (+ lý do)
+ * - POST /borrowing/{loanId}/return : Trả sách (PICKED_UP → RETURNED)
  */
 @Controller
 @RequestMapping("/borrowing")
@@ -43,116 +49,76 @@ public class BorrowingController {
     private LoanRepository loanRepository;
     
     /**
-     * Hiển thị form mượn sách (lựa chọn sách và số lượng)
+     * ⚠️ DEPRECATED: Sử dụng POST /user/borrow thay vào đó
+     * User đặt lịch mượn sách từ trang chủ, không phải từ đây
      */
-    @GetMapping("/borrow-form")
-    public String showBorrowForm(Model model, Principal principal) {
-        if (principal == null) {
-            return "redirect:/login";
-        }
-        
-        // Lấy danh sách sách có sẵn
-        List<Book> availableBooks = bookRepository.findAll()
-            .stream()
-            .filter(book -> book.getQuantity() > 0)
-            .collect(Collectors.toList());
-        
-        model.addAttribute("books", availableBooks);
-        
-        // Lấy thông tin user
-        Optional<User> userOpt = userRepository.findByMssv(principal.getName());
-        if (userOpt.isPresent()) {
-            model.addAttribute("user", userOpt.get());
-        }
-        
-        return "borrowing/borrow-form";
-    }
-    
     /**
-     * Xử lý mượn sách (form submission)
-     * 
-     * @param bookId ID của cuốn sách
-     * @param quantity Số lượng mượn
-     * @param principal Thông tin người dùng đăng nhập
-     * @return Redirect tới lịch sử mượn hoặc form với lỗi
+     * Trả sách (user hoặc admin)
+     * Chuyển PICKED_UP → RETURNED
+     * Tính phí nếu quá hạn
      */
-    @PostMapping("/borrow")
-    public String borrowBook(@RequestParam String bookId, 
-                            @RequestParam(defaultValue = "1") int quantity,
-                            Principal principal, 
+    @PostMapping("/{loanId}/return")
+    public String returnBook(@PathVariable String loanId,
+                            Principal principal,
                             RedirectAttributes redirectAttributes) {
         try {
-            // Kiểm tra xem user có đăng nhập không
-            if (principal == null) {
-                redirectAttributes.addFlashAttribute("error", "Bạn cần đăng nhập để mượn sách");
-                return "redirect:/login";
+            Optional<Loan> loanOpt = loanRepository.findById(loanId);
+            if (!loanOpt.isPresent()) {
+                redirectAttributes.addFlashAttribute("error", "❌ Không tìm thấy phiếu mượn");
+                return "redirect:/user/borrow-history";
             }
             
-            // Gọi service mượn sách
-            Loan loan = borrowingService.borrowBook(bookId, principal.getName(), quantity);
+            Loan returnedLoan = borrowingService.returnBook(loanId);
             
-            // Lấy thông tin sách
-            Book book = bookRepository.findById(bookId).orElse(null);
-            
-            // Thêm success message
-            redirectAttributes.addFlashAttribute("success", 
-                String.format("✅ Mượn sách '%s' thành công! Hạn trả: %s", 
-                    book != null ? book.getTitle() : "N/A",
-                    loan.getDueDate()));
+            String message = "✅ Trả sách thành công!";
+            if (returnedLoan.getLateFee() > 0) {
+                message += String.format(" Phí phạt: %.0f đ", returnedLoan.getLateFee());
+            }
+            redirectAttributes.addFlashAttribute("success", message);
             
             return "redirect:/user/borrow-history";
             
         } catch (BorrowingException e) {
-            // Lỗi từ logic mượn sách
             redirectAttributes.addFlashAttribute("error", "❌ " + e.getMessage());
-            return "redirect:/borrowing/borrow-form";
-                
-        } catch (Exception e) {
-            // Lỗi không mong muốn
-            redirectAttributes.addFlashAttribute("error", "❌ Có lỗi xảy ra: " + e.getMessage());
-            return "redirect:/borrowing/borrow-form";
+            return "redirect:/user/borrow-history";
         }
     }
     
     /**
-     * Xử lý trả sách (form submission)
-     * 
-     * @param loanId ID của bản ghi mượn
-     * @param principal Thông tin người dùng đăng nhập
-     * @return Redirect tới lịch sử mượn
+     * ADMIN: Xác nhận đã lấy sách
+     * Chuyển PENDING → PICKED_UP
      */
-    @PostMapping("/return/{loanId}")
-    public String returnBook(@PathVariable String loanId, 
-                            Principal principal,
+    @PostMapping("/{loanId}/pickup")
+    public String pickupBook(@PathVariable String loanId,
                             RedirectAttributes redirectAttributes) {
         try {
-            // Lấy thông tin Loan để kiểm tra quyền
-            Optional<Loan> loanOpt = loanRepository.findById(loanId);
-            if (!loanOpt.isPresent()) {
-                redirectAttributes.addFlashAttribute("error", "❌ Không tìm thấy phiếu mượn");
-                return "redirect:/admin/borrow-history";
-            }
-            
-            Loan loan = loanOpt.get();
-            
-            // Gọi service trả sách
-            Loan returnedLoan = borrowingService.returnBook(loanId, loan.getBookId());
-            
-            // Thêm success message
-            String message = "✅ Trả sách thành công!";
-            if (returnedLoan.getLateFee() > 0) {
-                message += String.format(" Phí phạt quá hạn: %.0f đ", returnedLoan.getLateFee());
-            }
-            redirectAttributes.addFlashAttribute("success", message);
-            
+            Loan loan = borrowingService.pickupBook(loanId);
+            redirectAttributes.addFlashAttribute("success",
+                String.format("✅ Đã xác nhận lấy sách! Hạn trả: %s",
+                    loan.getDueDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))));
             return "redirect:/admin/borrow-history";
-            
         } catch (BorrowingException e) {
             redirectAttributes.addFlashAttribute("error", "❌ " + e.getMessage());
             return "redirect:/admin/borrow-history";
-                
-        } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("error", "❌ Có lỗi xảy ra: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * ADMIN: Hủy đặt lịch mượn
+     * Chuyển PENDING/PICKED_UP → CANCELLED
+     * Cộng lại quantity sách
+     */
+    @PostMapping("/{loanId}/cancel")
+    public String cancelBorrow(@PathVariable String loanId,
+                              @RequestParam String cancelReason,
+                              RedirectAttributes redirectAttributes) {
+        try {
+            borrowingService.cancelBorrow(loanId, cancelReason);
+            redirectAttributes.addFlashAttribute("success",
+                String.format("✅ Hủy đặt lịch thành công! Lý do: %s", cancelReason));
+            return "redirect:/admin/borrow-history";
+        } catch (BorrowingException e) {
+            redirectAttributes.addFlashAttribute("error", "❌ " + e.getMessage());
             return "redirect:/admin/borrow-history";
         }
     }

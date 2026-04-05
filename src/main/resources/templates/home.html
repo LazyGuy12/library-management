@@ -156,8 +156,7 @@
                                     <span class="small fw-bold" th:classappend="${book.quantity > 0 ? 'text-success' : 'text-danger'}" 
                                           th:text="'Còn: ' + ${book.quantity}"></span>
                                     <a th:if="${book.quantity > 0}" 
-                                       th:href="@{/borrowing/borrow-form}"
-                                       onclick="document.getElementById('selectedBookId').value='[[ ${book.id} ]]'; alert('Vui lòng chọn sách từ danh sách'); return false;"
+                                       th:href="@{/user/borrow(bookId=${book.id})}"
                                        class="btn btn-sm btn-primary px-3 rounded-pill shadow-sm"
                                        th:text="'Mượn sách'"></a>
                                     <button th:if="${book.quantity <= 0}" 

@@ -2,6 +2,7 @@ package library_management.services;
 
 import library_management.models.Book;
 import library_management.models.Loan;
+import library_management.models.LoanStatus;
 import library_management.models.User;
 import library_management.repository.BookRepository;
 import library_management.repository.LoanRepository;
@@ -152,7 +153,7 @@ public class TestDataService {
         loan.setBookId(book.getId());
         loan.setBorrowDate(borrowDate);
         loan.setDueDate(dueDate);
-        loan.setStatus("ACTIVE"); // Chưa trả
+        loan.setStatus(LoanStatus.PICKED_UP); // Quá hạn loan đã being picked up
         loan.setQuantity(1);
         loan.setLateFee(0);
         loan.setCreatedAt(LocalDateTime.now());
@@ -199,10 +200,8 @@ public class TestDataService {
             throw new IllegalArgumentException(error);
         }
         
-        Loan loan = loanOpt.get();
-        
         // Gọi borrowingService.returnBook() - logic xử lý trả sách
-        borrowingService.returnBook(loanId, loan.getBookId());
+        borrowingService.returnBook(loanId);
         
         // Lấy thông tin loan sau khi trả
         Loan updatedLoan = loanRepository.findById(loanId).get();

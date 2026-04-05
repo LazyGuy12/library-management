@@ -1,9 +1,6 @@
 package library_management.services;
 
-import library_management.models.Book;
-import library_management.models.Fine;
-import library_management.models.Loan;
-import library_management.models.User;
+import library_management.models.*;
 import library_management.exceptions.*;
 import library_management.repository.BookRepository;
 import library_management.repository.FineRepository;
@@ -17,25 +14,31 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
- * Service xử lý logic nghiệp vụ mượn sách
+ * Service xử lý logic nghiệp vụ mượn sách - APPOINTMENT BASED FLOW
  * 
- * Quy tắc mượn sách:
- * 1. Thẻ độc giả phải tồn tại, ACTIVE và chưa hết hạn
- * 2. Người dùng chỉ được mượn tối đa 3 cuốn
- * 3. Cuốn sách phải có trạng thái AVAILABLE
- * 4. Mỗi sách chỉ có 1 bản được cập nhật khi mượn
+ * Flow mới:
+ * 1. User đặt lịch mượn sách (appointmentTime) → PENDING, -1 quantity
+ * 2. Admin xác nhận đã lấy sách → PICKED_UP, borrowDate = hôm nay, dueDate = appointmentTime + 14 ngày
+ * 3. User trả sách → RETURNED, tính phí từ dueDate nếu quá hạn
+ * 4. Admin có thể cancel PENDING → +1 quantity, nhập lý do
+ * 
+ * Quy tắc:
+ * - Thẻ phải ACTIVE, chưa hết hạn để đặt lịch
+ * - Tối đa 3 cuốn đang PENDING + PICKED_UP (chưa trả/hủy)
+ * - Phí phạt: 5.000₫/cuốn/ngày, tính từ dueDate
  */
 @Service
 public class BorrowingService {
     
     private static final Logger logger = LoggerFactory.getLogger(BorrowingService.class);
     
-    // Hằng số
-    private static final int MAX_BORROW_LIMIT = 3;                    // Tối đa 3 cuốn/người
-    private static final int BORROW_DURATION_DAYS = 14;               // Hạn trả: 14 ngày
+    private static final int MAX_BORROW_LIMIT = 3;
+    private static final int BORROW_DURATION_DAYS = 14;
+    private static final long LATE_FEE_PER_DAY = 5000; // 5.000₫/cuốn/ngày
     
     @Autowired
     private LoanRepository loanRepository;
@@ -49,286 +52,357 @@ public class BorrowingService {
     @Autowired
     private FineRepository fineRepository;
     
+    // ===================== NEW FLOW =====================
+    
     /**
-     * Thực hiện mượn sách cho một người dùng (dùng Mã Thẻ Độc Giả)
+     * USER REQUEST BORROW - Đặt lịch mượn sách
      * 
-     * @param bookId ID của cuốn sách cần mượn
-     * @param idCard Mã thẻ độc giả (ví dụ: LIB-2026-2280601489)
-     * @return Đối tượng Loan vừa tạo
-     * @throws BorrowingException nếu không thỏa mãn điều kiện mượn
+     * Bước:
+     * 1. Validate thẻ độc giả (ACTIVE, không hết hạn)
+     * 2. Validate giới hạn mượn (PENDING + PICKED_UP ≤ 3)
+     * 3. Validate sách có trong kho
+     * 4. Tạo Loan với status = PENDING
+     * 5. -1 quantity sách
+     * 6. Tính dueDate = appointmentTime + số ngày tùy chỉnh (tối đa 14)
+     * 
+     * @param userId User ID
+     * @param bookId Book ID
+     * @param appointmentTime Lúc user chọn đến nhận sách
+     * @param dueDate Ngày hạn trả (LocalDate, tối đa 14 ngày từ appointmentTime)
+     * @return Loan vừa tạo (PENDING)
      */
     @Transactional
-    public Loan borrowBook(String bookId, String idCard) {
-        // Tìm user bằng mã thẻ độc giả
-        User user = userRepository.findByIdCard(idCard)
-            .orElseThrow(() -> new BorrowingException(
-                "Không tìm thấy thẻ độc giả với mã: " + idCard, 
-                "CARD_NOT_FOUND"
-            ));
+    public Loan requestBorrow(String userId, String bookId, LocalDateTime appointmentTime, LocalDate dueDate) {
+        logger.info("📅 User {} đặt lịch mượn sách {} vào {}, hạn trả {}", userId, bookId, appointmentTime, dueDate);
         
-        return borrowBookByUserId(bookId, user.getId(), LocalDate.now().plusDays(BORROW_DURATION_DAYS), 1);
+        // Validate user & card
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy người dùng", "USER_NOT_FOUND"));
+        validateCard(user);
+        
+        // Validate borrow limit (PENDING + PICKED_UP ≤ 3)
+        validateBorrowLimit(userId);
+        
+        // Validate book exists & available
+        Book book = bookRepository.findById(bookId)
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy sách", "BOOK_NOT_FOUND"));
+        
+        if (book.getQuantity() <= 0) {
+            throw new BookNotAvailableException("Sách '" + book.getTitle() + "' không còn");
+        }
+        
+        // Validate dueDate
+        LocalDate appointmentDate = appointmentTime.toLocalDate();
+        if (dueDate == null) {
+            dueDate = appointmentDate.plusDays(BORROW_DURATION_DAYS);
+        }
+        if (dueDate.isBefore(appointmentDate)) {
+            throw new BorrowingException("Ngày hạn trả phải sau ngày nhận sách", "INVALID_DATE");
+        }
+        if (dueDate.isAfter(appointmentDate.plusDays(BORROW_DURATION_DAYS))) {
+            throw new BorrowingException("Ngày hạn trả tối đa là " + BORROW_DURATION_DAYS + " ngày", "EXCEEDS_MAX_DAYS");
+        }
+        
+        // Create Loan with PENDING status
+        Loan loan = Loan.builder()
+            .userId(userId)
+            .bookId(bookId)
+            .appointmentTime(appointmentTime)
+            .dueDate(dueDate)
+            .status(LoanStatus.PENDING)
+            .quantity(1)
+            .lateFee(0)
+            .createdAt(LocalDateTime.now())
+            .notes("Đặt lịch mượn sách - Hẹn lấy: " + appointmentTime)
+            .build();
+        
+        Loan savedLoan = loanRepository.save(loan);
+        
+        // Decrease book quantity
+        book.setQuantity(book.getQuantity() - 1);
+        if (book.getQuantity() <= 0) {
+            book.setStatus("BORROWED");
+        }
+        bookRepository.save(book);
+        
+        logger.info("✅ Loan PENDING created: {} | appointmentTime: {} | dueDate: {}", 
+            savedLoan.getId(), appointmentTime, dueDate);
+        
+        return savedLoan;
     }
     
     /**
-     * Mượn sách sử dụng username (dùng cho MVC controller)
+     * ADMIN PICKUP BOOK - Admin xác nhận đã lấy sách
      * 
-     * @param bookId ID của cuốn sách
-     * @param username MSSV hoặc username của người dùng
-     * @param quantity Số lượng mượn
-     * @return Đối tượng Loan vừa tạo
+     * Bước:
+     * 1. Tìm Loan với status = PENDING
+     * 2. Cập nhật: status = PICKED_UP, borrowDate = hôm nay
+     * 3. dueDate vẫn giữ (đã tính từ appointmentTime)
+     * 
+     * @param loanId Loan ID
+     * @return Loan cập nhật
      */
     @Transactional
-    public Loan borrowBook(String bookId, String username, int quantity) {
-        // Tìm user bằng username/MSSV
-        User user = userRepository.findByMssv(username)
-            .orElseThrow(() -> new BorrowingException(
-                "Không tìm thấy người dùng với mã số: " + username, 
-                "USER_NOT_FOUND"
-            ));
-        
-        return borrowBookByUserId(bookId, user.getId(), LocalDate.now().plusDays(BORROW_DURATION_DAYS), quantity);
-    }
-    
-    /**
-     * Thực hiện mượn sách với thông tin chi tiết
-     * 
-     * @param bookId ID của cuốn sách
-     * @param idCard Mã thẻ độc giả người mượn
-     * @param dueDate Ngày hạn trả
-     * @param quantity Số lượng mượn
-     * @return Đối tượng Loan vừa tạo
-     */
-    @Transactional
-    public Loan borrowBookWithDetails(String bookId, String idCard, LocalDate dueDate, int quantity) {
-        // Tìm user bằng mã thẻ độc giả
-        User user = userRepository.findByIdCard(idCard)
-            .orElseThrow(() -> new BorrowingException(
-                "Không tìm thấy thẻ độc giả với mã: " + idCard, 
-                "CARD_NOT_FOUND"
-            ));
-        
-        return borrowBookByUserId(bookId, user.getId(), dueDate, quantity);
-    }
-    
-    /**
-     * Thực hiện mượn sách cho một người dùng (sử dụng userId)
-     * 
-     * @param bookId ID của cuốn sách cần mượn
-     * @param userId ID của người dùng mượn sách
-     * @param dueDate Ngày hạn trả
-     * @param quantity Số lượng
-     * @return Đối tượng Loan vừa tạo
-     * @throws BorrowingException nếu không thỏa mãn điều kiện mượn
-     */
-    @Transactional
-    public Loan borrowBookByUserId(String bookId, String userId, LocalDate dueDate, int quantity) {
-        
-        logger.info("📚 Bắt đầu process mượn sách: bookId={}, userId={}, dueDate={}, quantity={}", 
-            bookId, userId, dueDate, quantity);
-        
-        try {
-            // ===== BƯỚC 1: Lấy thông tin sách =====
-            logger.info("🔍 Step 1: Lấy thông tin sách (ID: {})", bookId);
-            Book book = bookRepository.findById(bookId)
-                .orElseThrow(() -> new BorrowingException("Không tìm thấy cuốn sách", "BOOK_NOT_FOUND"));
-            logger.info("✅ Tìm được sách: {}", book.getTitle());
-            
-            // ===== BƯỚC 2: Kiểm tra số lượng sách còn trong kho =====
-            logger.info("🔍 Step 2: Kiểm tra số lượng sách (quantity: {}, yêu cầu: {})", book.getQuantity(), quantity);
-            if (book.getQuantity() < quantity) {
-                throw new BookNotAvailableException("Sách '" + book.getTitle() + "' không đủ số lượng. Còn lại: " + book.getQuantity());
-            }
-            if (book.getQuantity() <= 0) {
-                throw new BookNotAvailableException(book.getTitle());
-            }
-            logger.info("✅ Sách đủ số lượng");
-            
-            // ===== BƯỚC 3: Lấy thông tin người dùng =====
-            logger.info("🔍 Step 3: Lấy thông tin người dùng (ID: {})", userId);
-            User user = userRepository.findById(userId)
-                .orElseThrow(() -> new BorrowingException("Không tìm thấy người dùng", "USER_NOT_FOUND"));
-            logger.info("✅ Tìm được user: {}", user.getFullName());
-            
-            // ===== BƯỚC 4: Kiểm tra thẻ độc giả =====
-            logger.info("🔍 Step 4: Validate thẻ độc giả (status: {})", user.getStatus());
-            validateCard(user);
-            logger.info("✅ Thẻ độc giả hợp lệ");
-            
-            // ===== BƯỚC 5: Kiểm tra số lượng sách đang mượn =====
-            logger.info("🔍 Step 5: Kiểm tra số lượng sách đang mượn");
-            validateBorrowLimit(userId);
-            logger.info("✅ Chưa vượt quá giới hạn mượn");
-            
-            // ===== BƯỚC 6: Tạo bản ghi mượn (Loan) =====
-            logger.info("🔍 Step 6: Tạo bản ghi mượn (Loan)");
-            Loan loan = Loan.builder()
-                .bookId(bookId)
-                .userId(userId)
-                .borrowDate(LocalDate.now())
-                .dueDate(dueDate)
-                .status("ACTIVE")
-                .quantity(quantity)
-                .lateFee(0)
-                .createdAt(LocalDateTime.now())
-                .notes("Mượn sách từ thư viện - Số lượng: " + quantity)
-                .build();
-            
-            logger.info("💾 Lưu Loan vào database...");
-            Loan savedLoan = loanRepository.save(loan);
-            logger.info("✅ Loan saved with ID: {}", savedLoan.getId());
-            
-            // ===== BƯỚC 7: Giảm số lượng sách trong kho =====
-            logger.info("🔍 Step 7: Giảm số lượng sách ({} - {})", book.getQuantity(), quantity);
-            book.setQuantity(book.getQuantity() - quantity);
-            if (book.getQuantity() <= 0) {
-                book.setStatus("BORROWED");
-                logger.info("📕 Hết sách, cập nhật status = BORROWED");
-            }
-            bookRepository.save(book);
-            logger.info("✅ Book quantity updated: {}", book.getQuantity());
-            
-            logger.info("🎉 Mượn sách thành công!");
-            return savedLoan;
-            
-        } catch (BorrowingException e) {
-            logger.error("❌ BorrowingException: {}", e.getMessage());
-            throw e;
-        } catch (Exception e) {
-            logger.error("❌ Lỗi không mong muốn:", e);
-            throw e;
-        }
-    }
-    
-    /**
-     * Kiểm tra tính hợp lệ của thẻ độc giả để mượn sách
-     * Thẻ phải:
-     * - Tồn tại
-     * - Có trạng thái ACTIVE (hoạt động)
-     * - Chưa hết hạn (expiryDate >= hôm nay)
-     * - Không bị SUSPENDED (khóa do vi phạm)
-     * 
-     * @param user Thông tin người dùng
-     * @throws CardNotFoundException nếu không có thẻ
-     * @throws CardInactiveException nếu thẻ bị khóa do vi phạm
-     * @throws CardExpiredException nếu thẻ đã hết hạn
-     */
-    private void validateCard(User user) {
-        // Kiểm tra thẻ có tồn tại không
-        if (user.getStatus() == null) {
-            throw new CardNotFoundException(user.getId());
-        }
-        
-        // Kiểm tra thẻ bị khóa do vi phạm (SUSPENDED)
-        if (user.getStatus().equals("SUSPENDED")) {
-            throw new CardInactiveException("Thẻ độc giả đang bị khóa do vi phạm. Vui lòng liên hệ admin.");
-        }
-        
-        // Kiểm tra thẻ hết hạn (EXPIRED)
-        if (user.getStatus().equals("EXPIRED") || 
-            (user.getExpiryDate() != null && user.getExpiryDate().isBefore(LocalDate.now()))) {
-            throw new CardExpiredException(user.getExpiryDate() != null ? user.getExpiryDate().toString() : "Thẻ hết hạn");
-        }
-        
-        // Kiểm tra thẻ ACTIVE
-        if (!user.getStatus().equals("ACTIVE")) {
-            throw new CardInactiveException("Thẻ độc giả không hoạt động");
-        }
-    }
-    
-    /**
-     * Kiểm tra người dùng có vượt quá giới hạn mượn sách không
-     * Quy tắc: Mỗi người dùng chỉ được mượn tối đa 3 cuốn
-     * 
-     * @param userId ID của người dùng
-     * @throws BorrowLimitExceededException nếu đã mượn ≥ 3 cuốn
-     */
-    private void validateBorrowLimit(String userId) {
-        // Đếm số sách hiện tại đang mượn (status = "ACTIVE")
-        long activeLoanCount = loanRepository.countByUserIdAndStatus(userId, "ACTIVE");
-        
-        // Nếu đã mượn ≥ 3 cuốn, không cho mượn thêm
-        if (activeLoanCount >= MAX_BORROW_LIMIT) {
-            throw new BorrowLimitExceededException((int) activeLoanCount);
-        }
-    }
-    
-    /**
-     * Trả sách (return book)
-     * Xử lý:
-     * - Cập nhật bản ghi mượn: status = "RETURNED", returnDate = hôm nay
-     * - Tính phí phạt nếu quá hạn (5.000₫/cuốn/ngày)
-     * - Tạo phiếu phạt nếu quá hạn
-     * - Khóa thẻ (SUSPENDED) nếu có phiếu phạt chưa thanh toán
-     * 
-     * @param loanId ID của bản ghi mượn
-     * @param bookId ID của cuốn sách
-     * @return Bản ghi mượn đã cập nhật
-     */
-    @Transactional
-    public Loan returnBook(String loanId, String bookId) {
-        // Lấy bản ghi mượn
+    public Loan pickupBook(String loanId) {
         Loan loan = loanRepository.findById(loanId)
             .orElseThrow(() -> new BorrowingException("Không tìm thấy bản ghi mượn", "LOAN_NOT_FOUND"));
         
-        // Lấy thông tin người dùng
-        User user = userRepository.findById(loan.getUserId())
-            .orElseThrow(() -> new BorrowingException("Không tìm thấy người dùng", "USER_NOT_FOUND"));
-        
-        LocalDate today = LocalDate.now();
-        long lateFeePerDay = 5000; // 5.000₫/cuốn/ngày
-        
-        // Tính phí phạt nếu quá hạn
-        long lateFee = 0;
-        if (today.isAfter(loan.getDueDate())) {
-            long daysLate = today.toEpochDay() - loan.getDueDate().toEpochDay();
-            lateFee = daysLate * loan.getQuantity() * lateFeePerDay;
-            logger.info("⚠️ Phát hiện quá hạn {} ngày, phí phạt: {} đ", daysLate, lateFee);
+        if (loan.getStatus() != LoanStatus.PENDING) {
+            throw new BorrowingException("Chỉ có thể xác nhận PENDING loans", "INVALID_STATUS");
         }
         
-        // Cập nhật ngày trả, trạng thái và phí phạt
-        loan.setReturnDate(today);
-        loan.setStatus("RETURNED");
-        loan.setLateFee((int) lateFee);
+        // Update status & set borrowDate = today
+        loan.setStatus(LoanStatus.PICKED_UP);
+        loan.setBorrowDate(LocalDate.now());
         Loan updatedLoan = loanRepository.save(loan);
         
-        // Nếu có phí phạt, tạo phiếu phạt
-        if (lateFee > 0) {
-            Fine fine = Fine.builder()
-                .userId(loan.getUserId())
-                .loanId(loanId)
-                .fineType("LATE_FEE")
-                .amount(lateFee)
-                .reason(String.format("Quá hạn trả sách: %d ngày, mức phạt %d đ/cuốn/ngày", 
-                    today.toEpochDay() - loan.getDueDate().toEpochDay(), lateFeePerDay))
-                .createdDate(today)
-                .status("PENDING")
-                .build();
-            fineRepository.save(fine);
-            logger.info("💰 Tạo phiếu phạt: {} đ cho user {}", lateFee, loan.getUserId());
-            
-            // Khóa thẻ nếu có phiếu phạt chưa thanh toán
-            user.setStatus("SUSPENDED");
-            userRepository.save(user);
-            logger.warn("🔒 Khóa thẻ user {} do có phiếu phạt chưa thanh toán", loan.getUserId());
-        }
-        
-        // Cộng lại số lượng sách khi trả
-        Book book = bookRepository.findById(bookId)
-            .orElseThrow(() -> new BorrowingException("Không tìm thấy sách", "BOOK_NOT_FOUND"));
-        int returnQuantity = loan.getQuantity() > 0 ? loan.getQuantity() : 1;
-        book.setQuantity(book.getQuantity() + returnQuantity);
-        book.setStatus("AVAILABLE");
-        bookRepository.save(book);
+        logger.info("✅ Loan PICKED_UP: {} | borrowDate: {} | dueDate: {}", 
+            loanId, loan.getBorrowDate(), loan.getDueDate());
         
         return updatedLoan;
     }
     
     /**
-     * Lấy thông tin bản ghi mượn sách
-     * @param loanId ID của bản ghi mượn
-     * @return Optional chứa Loan nếu tìm thấy
+     * ADMIN CANCEL BORROW - Hủy đặt lịch mượn
+     * 
+     * Bước:
+     * 1. Tìm Loan (PENDING hoặc PICKED_UP)
+     * 2. Cập nhật: status = CANCELLED, cancelReason = input
+     * 3. +1 quantity sách
+     * 
+     * @param loanId Loan ID
+     * @param cancelReason Lý do hủy
+     * @return Loan cập nhật
+     */
+    @Transactional
+    public Loan cancelBorrow(String loanId, String cancelReason) {
+        Loan loan = loanRepository.findById(loanId)
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy bản ghi mượn", "LOAN_NOT_FOUND"));
+        
+        if (loan.getStatus() == LoanStatus.RETURNED || loan.getStatus() == LoanStatus.CANCELLED) {
+            throw new BorrowingException("Không thể hủy loan đã trả hoặc đã hủy", "INVALID_STATUS");
+        }
+        
+        // Update status & reason
+        loan.setStatus(LoanStatus.CANCELLED);
+        loan.setCancelReason(cancelReason);
+        Loan updatedLoan = loanRepository.save(loan);
+        
+        // Increase book quantity
+        Book book = bookRepository.findById(loan.getBookId())
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy sách", "BOOK_NOT_FOUND"));
+        book.setQuantity(book.getQuantity() + loan.getQuantity());
+        book.setStatus("AVAILABLE");
+        bookRepository.save(book);
+        
+        logger.warn("🚫 Loan CANCELLED: {} | Reason: {}", loanId, cancelReason);
+        
+        return updatedLoan;
+    }
+    
+    /**
+     * RETURN BOOK - Trả sách (tính phí nếu quá hạn)
+     * 
+     * Bước:
+     * 1. Tìm Loan (PICKED_UP)
+     * 2. Tính phí: nếu returnDate > dueDate
+     * 3. Cập nhật status = RETURNED, returnDate, lateFee
+     * 4. Nếu có phí → Tạo Fine (PENDING), khóa thẻ (SUSPENDED)
+     * 5. +1 quantity sách
+     * 
+     * @param loanId Loan ID
+     * @return Loan cập nhật
+     */
+    @Transactional
+    public Loan returnBook(String loanId) {
+        Loan loan = loanRepository.findById(loanId)
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy bản ghi mượn", "LOAN_NOT_FOUND"));
+        
+        if (loan.getStatus() != LoanStatus.PICKED_UP) {
+            throw new BorrowingException("Chỉ có thể trả PICKED_UP loans", "INVALID_STATUS");
+        }
+        
+        User user = userRepository.findById(loan.getUserId())
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy người dùng", "USER_NOT_FOUND"));
+        
+        LocalDate today = LocalDate.now();
+        long lateFee = 0;
+        
+        // Calculate late fee if overdue
+        if (today.isAfter(loan.getDueDate())) {
+            long daysLate = today.toEpochDay() - loan.getDueDate().toEpochDay();
+            lateFee = daysLate * loan.getQuantity() * LATE_FEE_PER_DAY;
+            logger.warn("⚠️ Quá hạn {} ngày, phí phạt: {} đ", daysLate, lateFee);
+        }
+        
+        // Update loan
+        loan.setStatus(LoanStatus.RETURNED);
+        loan.setReturnDate(today);
+        loan.setLateFee(lateFee);
+        Loan updatedLoan = loanRepository.save(loan);
+        
+        // Create fine if overdue
+        if (lateFee > 0) {
+            Fine fine = Fine.builder()
+                .userId(user.getId())
+                .loanId(loanId)
+                .fineType("LATE_FEE")
+                .amount(lateFee)
+                .reason(String.format("Quá hạn trả sách: %d ngày, mức phạt %d đ/cuốn/ngày", 
+                    today.toEpochDay() - loan.getDueDate().toEpochDay(), LATE_FEE_PER_DAY))
+                .createdDate(today)
+                .status("PENDING")
+                .build();
+            fineRepository.save(fine);
+            
+            // Suspend card if fine unpaid
+            user.setStatus("SUSPENDED");
+            userRepository.save(user);
+            logger.warn("🔒 Thẻ SUSPENDED do phí chưa thanh toán");
+        }
+        
+        // Increase book quantity
+        Book book = bookRepository.findById(loan.getBookId())
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy sách", "BOOK_NOT_FOUND"));
+        book.setQuantity(book.getQuantity() + loan.getQuantity());
+        book.setStatus("AVAILABLE");
+        bookRepository.save(book);
+        
+        logger.info("✅ Book RETURNED: {} | returnDate: {} | lateFee: {}", 
+            loanId, today, lateFee);
+        
+        return updatedLoan;
+    }
+    
+    // ===================== VALIDATION & HELPERS =====================
+    
+    /**
+     * Validate card (thẻ phải ACTIVE, chưa hết hạn)
+     */
+    private void validateCard(User user) {
+        if (user.getStatus() == null) {
+            throw new CardNotFoundException(user.getId());
+        }
+        
+        if (user.getStatus().equals("SUSPENDED")) {
+            throw new CardInactiveException("Thẻ bị khóa do vi phạm");
+        }
+        
+        if (user.getStatus().equals("EXPIRED") || 
+            (user.getExpiryDate() != null && user.getExpiryDate().isBefore(LocalDate.now()))) {
+            throw new CardExpiredException(user.getExpiryDate() != null ? user.getExpiryDate().toString() : "Thẻ hết hạn");
+        }
+        
+        if (!user.getStatus().equals("ACTIVE")) {
+            throw new CardInactiveException("Thẻ không hoạt động");
+        }
+    }
+    
+    /**
+     * Validate borrow limit (PENDING + PICKED_UP ≤ 3)
+     */
+    private void validateBorrowLimit(String userId) {
+        // Count loans with PENDING or PICKED_UP status
+        long pendingCount = loanRepository.countByUserIdAndStatus(userId, LoanStatus.PENDING.toString());
+        long pickedUpCount = loanRepository.countByUserIdAndStatus(userId, LoanStatus.PICKED_UP.toString());
+        long totalActive = pendingCount + pickedUpCount;
+        
+        logger.info("📊 User loans - PENDING: {}, PICKED_UP: {}, Total: {}", 
+            pendingCount, pickedUpCount, totalActive);
+        
+        if (totalActive >= MAX_BORROW_LIMIT) {
+            throw new BorrowLimitExceededException((int) totalActive);
+        }
+    }
+    
+    /**
+     * ADMIN QUICK BORROW - Mượn nhanh (khách hàng đến trực tiếp tại quầy)
+     * 
+     * Bước:
+     * 1. Validate thẻ (ACTIVE, không hết hạn)
+     * 2. Validate giới hạn mượn (PENDING + PICKED_UP ≤ 3)
+     * 3. Validate sách có trong kho
+     * 4. Tạo Loan với status = PICKED_UP ngay lập tức
+     * 5. Set borrowDate = hôm nay, dueDate = ngày được chỉ định
+     * 6. -1 quantity sách
+     * 
+     * @param userId User ID
+     * @param bookId Book ID
+     * @param dueDate Ngày hạn trả (LocalDate)
+     * @return Loan vừa tạo (PICKED_UP)
+     */
+    @Transactional
+    public Loan quickBorrow(String userId, String bookId, LocalDate dueDate) {
+        logger.info("⚡ Admin xử lý mượn nhanh: userId={}, bookId={}, dueDate={}", userId, bookId, dueDate);
+        
+        // Validate user & card
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy người dùng", "USER_NOT_FOUND"));
+        validateCard(user);
+        
+        // Validate borrow limit
+        validateBorrowLimit(userId);
+        
+        // Validate book exists & available
+        Book book = bookRepository.findById(bookId)
+            .orElseThrow(() -> new BorrowingException("Không tìm thấy sách", "BOOK_NOT_FOUND"));
+        
+        if (book.getQuantity() <= 0) {
+            throw new BookNotAvailableException("Sách '" + book.getTitle() + "' không còn");
+        }
+        
+        // Validate dueDate
+        LocalDate today = LocalDate.now();
+        if (dueDate == null) {
+            dueDate = today.plusDays(BORROW_DURATION_DAYS);
+        }
+        if (dueDate.isBefore(today)) {
+            throw new BorrowingException("Ngày hạn trả không thể là ngày quá khứ", "INVALID_DATE");
+        }
+        if (dueDate.isAfter(today.plusDays(BORROW_DURATION_DAYS))) {
+            throw new BorrowingException("Ngày hạn trả tối đa là " + BORROW_DURATION_DAYS + " ngày", "EXCEEDS_MAX_DAYS");
+        }
+        
+        // Create loan as PICKED_UP immediately (customer taking it now at counter)
+        Loan loan = Loan.builder()
+            .userId(userId)
+            .bookId(bookId)
+            .appointmentTime(LocalDateTime.now())
+            .borrowDate(today)
+            .dueDate(dueDate)
+            .status(LoanStatus.PICKED_UP)
+            .quantity(1)
+            .lateFee(0)
+            .createdAt(LocalDateTime.now())
+            .notes("Mượn nhanh tại quầy - Admin xử lý trực tiếp")
+            .build();
+        
+        Loan savedLoan = loanRepository.save(loan);
+        
+        // Decrease book quantity
+        book.setQuantity(book.getQuantity() - 1);
+        if (book.getQuantity() <= 0) {
+            book.setStatus("BORROWED");
+        }
+        bookRepository.save(book);
+        
+        logger.info("✅ Quick Borrow completed: {} | borrowDate: {} | dueDate: {}", 
+            savedLoan.getId(), today, dueDate);
+        
+        return savedLoan;
+    }
+    
+    /**
+     * Get loan by ID
      */
     public Optional<Loan> getLoanById(String loanId) {
         return loanRepository.findById(loanId);
+    }
+    
+    /**
+     * Get all loans by user
+     */
+    public List<Loan> getLoansByUserId(String userId) {
+        return loanRepository.findByUserId(userId);
     }
 }

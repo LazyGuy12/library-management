@@ -65,14 +65,15 @@
                                 <th>Tên Độc Giả</th>
                                 <th>Tên Sách</th>
                                 <th>Mã Sách</th>
+                                <th>Ngày Đặt Lịch</th>
                                 <th>Ngày Mượn</th>
                                 <th>Hạn Trả</th>
-                                <th>Trạng Thái</th>
+                                <th class="text-center">Trạng Thái</th>
                                 <th class="text-center">Hành Động</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr th:each="loan : ${loans}" th:classappend="${loan.status == 'ACTIVE' ? 'loan-status-active' : 'loan-status-returned'}">
+                            <tr th:each="loan : ${loans}" th:classappend="${loan.status == 'PENDING' ? 'table-warning' : (loan.status == 'PICKED_UP' ? '' : 'table-light')}">
                                 <td>
                                     <code th:text="${loan.readerCardId}"></code>
                                 </td>
@@ -86,42 +87,55 @@
                                     <code th:text="${loan.bookCode}"></code>
                                 </td>
                                 <td>
-                                    <i class="bi bi-calendar me-1"></i>
-                                    <span th:text="${#temporals.format(loan.borrowDate, 'dd/MM/yyyy')}"></span>
+                                    <i class="bi bi-calendar2 me-1"></i>
+                                    <span th:text="${#temporals.format(loan.appointmentTime, 'dd/MM/yyyy HH:mm')}"></span>
+                                </td>
+                                <td>
+                                    <span th:if="${loan.borrowDate != null}">
+                                        <i class="bi bi-calendar me-1"></i>
+                                        <span th:text="${#temporals.format(loan.borrowDate, 'dd/MM/yyyy')}"></span>
+                                    </span>
+                                    <span th:if="${loan.borrowDate == null}" class="text-muted fst-italic">Chưa nhận</span>
                                 </td>
                                 <td>
                                     <i class="bi bi-calendar-check me-1"></i>
                                     <span th:text="${#temporals.format(loan.dueDate, 'dd/MM/yyyy')}"></span>
                                 </td>
-                                <td>
-                                    <span th:if="${loan.status == 'ACTIVE'}" class="badge badge-active">
-                                        <i class="bi bi-hourglass-top me-1"></i>Đang Mượn
+                                <td class="text-center">
+                                    <span th:if="${loan.status == 'PENDING'}" class="badge bg-warning text-dark">
+                                        <i class="bi bi-hourglass-split me-1"></i>Chờ Nhận
                                     </span>
-                                    <span th:if="${loan.status == 'RETURNED'}" class="badge badge-returned">
+                                    <span th:if="${loan.status == 'PICKED_UP'}" class="badge bg-info text-white">
+                                        <i class="bi bi-book me-1"></i>Đang Mượn
+                                    </span>
+                                    <span th:if="${loan.status == 'RETURNED'}" class="badge bg-success">
                                         <i class="bi bi-check-circle me-1"></i>Đã Trả
+                                    </span>
+                                    <span th:if="${loan.status == 'CANCELLED'}" class="badge bg-danger">
+                                        <i class="bi bi-x-circle me-1"></i>Đã Hủy
                                     </span>
                                 </td>
                                 <td class="text-center">
                                     <div class="btn-group btn-group-sm">
-                                        <a th:if="${loan.status == 'ACTIVE'}" 
-                                           th:href="@{/admin/return-book/{loanId}(loanId=${loan.loanId})}"
+                                        <a th:if="${loan.status == 'PENDING'}" 
+                                           th:href="@{/admin/{loanId}/pickup(loanId=${loan.loanId})}"
+                                           class="btn btn-success"
+                                           title="Xác nhận lấy sách"
+                                           onclick="return confirm('Xác nhận khách hàng đã lấy sách?')">
+                                            <i class="bi bi-check2"></i> Nhận
+                                        </a>
+                                        <a th:if="${loan.status == 'PICKED_UP'}" 
+                                           th:href="@{/admin/{loanId}/return(loanId=${loan.loanId})}"
                                            class="btn btn-warning"
                                            title="Trả sách"
-                                           onclick="return confirm('Xác nhận trả sách này?')">
-                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                           onclick="return confirm('Xác nhận khách hàng trả sách?')">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Trả
                                         </a>
                                         <a th:href="@{/admin/borrow-detail/{loanId}(loanId=${loan.loanId})}"
                                            class="btn btn-info"
                                            title="Xem chi tiết">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                                        </button>
                                     </div>
                                 </td>
                             </tr>

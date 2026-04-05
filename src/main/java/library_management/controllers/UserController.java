@@ -28,6 +28,7 @@ import library_management.repository.BookRepository;
 import library_management.repository.LoanRepository;
 import library_management.repository.NotificationRepository;
 import library_management.services.BorrowingService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 /**
  * Controller xử lý yêu cầu của User
@@ -53,6 +54,8 @@ public class UserController {
     
     @Autowired
     private BorrowingService borrowingService;
+    
+    private BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     
     /**
      * Xem lịch sử mượn sách của user (PENDING, PICKED_UP, RETURNED, CANCELLED)
@@ -382,5 +385,120 @@ public class UserController {
         }
         
         return "redirect:/user/notifications";
+    }
+    
+    /**
+     * VIEW USER PROFILE
+     * GET /user/profile
+     */
+    @GetMapping("/profile")
+    public String viewProfile(Principal principal, Model model) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+        if (!userOpt.isPresent()) {
+            return "redirect:/login";
+        }
+        
+        User user = userOpt.get();
+        model.addAttribute("user", user);
+        
+        return "user/profile";
+    }
+    
+    /**
+     * UPDATE USER INFO (except idCard)
+     * POST /user/profile/update-info
+     */
+    @PostMapping("/profile/update-info")
+    public String updateUserInfo(Principal principal,
+                                @RequestParam String fullName,
+                                @RequestParam String email,
+                                RedirectAttributes attributes) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        try {
+            Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+            if (!userOpt.isPresent()) {
+                return "redirect:/login";
+            }
+            
+            User user = userOpt.get();
+            
+            // Update only allowed fields
+            if (fullName != null && !fullName.trim().isEmpty()) {
+                user.setFullName(fullName);
+            }
+            if (email != null && !email.trim().isEmpty()) {
+                user.setEmail(email);
+            }
+            
+            userRepository.save(user);
+            attributes.addFlashAttribute("success", "✅ Cập nhật thông tin thành công");
+        } catch (Exception e) {
+            attributes.addFlashAttribute("error", "❌ Lỗi: " + e.getMessage());
+        }
+        
+        return "redirect:/user/profile";
+    }
+    
+    /**
+     * CHANGE PASSWORD
+     * POST /user/profile/change-password
+     */
+    @PostMapping("/profile/change-password")
+    public String changePassword(Principal principal,
+                                @RequestParam String oldPassword,
+                                @RequestParam String newPassword,
+                                @RequestParam String confirmPassword,
+                                RedirectAttributes attributes) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        try {
+            Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+            if (!userOpt.isPresent()) {
+                return "redirect:/login";
+            }
+            
+            User user = userOpt.get();
+            
+            // Verify old password using BCrypt
+            if (oldPassword == null || !passwordEncoder.matches(oldPassword, user.getPassword())) {
+                attributes.addFlashAttribute("passwordError", "❌ Mật khẩu cũ không chính xác");
+                return "redirect:/user/profile";
+            }
+            
+            // Check new password & confirm match
+            if (newPassword == null || newPassword.trim().isEmpty()) {
+                attributes.addFlashAttribute("passwordError", "❌ Mật khẩu mới không được trống");
+                return "redirect:/user/profile";
+            }
+            
+            if (!newPassword.equals(confirmPassword)) {
+                attributes.addFlashAttribute("passwordError", "❌ Mật khẩu mới và xác nhận không khớp");
+                return "redirect:/user/profile";
+            }
+            
+            if (newPassword.length() < 6) {
+                attributes.addFlashAttribute("passwordError", "❌ Mật khẩu phải ít nhất 6 ký tự");
+                return "redirect:/user/profile";
+            }
+            
+            // Hash new password with BCrypt before saving
+            String hashedPassword = passwordEncoder.encode(newPassword);
+            user.setPassword(hashedPassword);
+            userRepository.save(user);
+            attributes.addFlashAttribute("success", "✅ Đổi mật khẩu thành công");
+        } catch (Exception e) {
+            attributes.addFlashAttribute("error", "❌ Lỗi: " + e.getMessage());
+        }
+        
+        return "redirect:/user/profile";
     }
 }

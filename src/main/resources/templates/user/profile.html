@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thông Tin Cá Nhân - Thư Viện Ngũ Quỷ</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .card { border: none; border-radius: 10px; }
+        .reader-card {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+        }
+        .info-card {
+            background: white;
+            border-left: 4px solid #667eea;
+        }
+        .form-section {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+        .section-title {
+            font-weight: bold;
+            color: #667eea;
+            font-size: 18px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm" th:replace="~{fragments/header :: navbar}"></nav>
+    
+    <!-- Sidebar -->
+    <div th:replace="~{fragments/header :: sidebar}"></div>
+
+    <div class="container mt-5 mb-5">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <!-- Header -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="text-white fw-bold mb-0">
+                        <i class="bi bi-person-circle me-2"></i>Thông Tin Cá Nhân
+                    </h2>
+                    <a href="/" class="btn btn-outline-light">
+                        <i class="bi bi-house me-1"></i>Trang Chủ
+                    </a>
+                </div>
+
+                <!-- Success/Error Messages -->
+                <div th:if="${success}" class="alert alert-success alert-dismissible fade show">
+                    <span th:text="${success}"></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                <div th:if="${passwordSuccess}" class="alert alert-success alert-dismissible fade show">
+                    <span th:text="${passwordSuccess}"></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                <div th:if="${error}" class="alert alert-danger alert-dismissible fade show">
+                    <span th:text="${error}"></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                <div th:if="${passwordError}" class="alert alert-danger alert-dismissible fade show">
+                    <span th:text="${passwordError}"></span>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+
+                <!-- Reader Card Display -->
+                <div class="reader-card p-4 mb-4">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="text-uppercase opacity-75 small mb-2">Thông Tin Độc Giả</h5>
+                            <h4 class="fw-bold mb-3" th:text="${user.fullName}">Tên độc giả</h4>
+                            
+                            <div class="row text-sm mb-3">
+                                <div class="col-6">
+                                    <small class="opacity-75 d-block">MSSV</small>
+                                    <span class="fw-bold" th:text="${user.mssv}">210xxxxxx</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="opacity-75 d-block">EMAIL</small>
+                                    <span class="fw-bold" th:text="${user.email}">user@hutech.edu.vn</span>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-6">
+                                    <small class="opacity-75 d-block">CARD ID</small>
+                                    <span class="fw-bold" th:text="${user.idCard}">LIB-2026-XXXX</span>
+                                </div>
+                                <div class="col-6">
+                                    <small class="opacity-75 d-block">HẠN DÙNG</small>
+                                    <span class="fw-bold text-warning" th:text="${#temporals.format(user.expiryDate, 'dd/MM/yyyy')}">01/01/2027</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center d-flex align-items-center justify-content-center">
+                            <div>
+                                <i class="bi bi-qr-code" style="font-size: 60px; opacity: 0.5;"></i>
+                                <p class="small mt-2 opacity-75">QR Code</p>
+                            </div>
+                        </div>
+                    </div>
+                    <hr class="bg-white">
+                    <div class="text-center">
+                        <span th:if="${user.status == 'ACTIVE'}" class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Đang Hoạt Động</span>
+                        <span th:if="${user.status == 'EXPIRED'}" class="badge bg-danger"><i class="bi bi-exclamation-circle me-1"></i>Hết Hạn</span>
+                        <span th:if="${user.status == 'SUSPENDED'}" class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Bị Khóa</span>
+                    </div>
+                </div>
+
+                <!-- Update User Info Form -->
+                <div class="form-section">
+                    <h5 class="section-title">
+                        <i class="bi bi-pencil-square me-2"></i>Chỉnh Sửa Thông Tin
+                    </h5>
+                    
+                    <form th:action="@{/user/profile/update-info}" method="post">
+                        <div class="mb-3">
+                            <label for="idCard" class="form-label">Thẻ Độc Giả (Không thể thay đổi)</label>
+                            <input type="text" class="form-control" id="idCard" th:value="${user.idCard}" disabled>
+                            <small class="text-muted">Thẻ độc giả cấp bởi thư viện, không được phép thay đổi</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="mssv" class="form-label">MSSV (Không thể thay đổi)</label>
+                            <input type="text" class="form-control" id="mssv" th:value="${user.mssv}" disabled>
+                            <small class="text-muted">Mã sinh viên là tài khoản đăng nhập, không được phép thay đổi</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="fullName" class="form-label">Họ và Tên <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="fullName" name="fullName" 
+                                   th:value="${user.fullName}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   th:value="${user.email}" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check-circle me-1"></i>Cập Nhật Thông Tin
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Change Password Form -->
+                <div class="form-section">
+                    <h5 class="section-title">
+                        <i class="bi bi-lock-fill me-2"></i>Đổi Mật Khẩu
+                    </h5>
+                    
+                    <form th:action="@{/user/profile/change-password}" method="post">
+                        <div class="mb-3">
+                            <label for="oldPassword" class="form-label">Mật Khẩu Cũ <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="oldPassword" name="oldPassword" 
+                                   required placeholder="Nhập mật khẩu cũ">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="newPassword" class="form-label">Mật Khẩu Mới <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="newPassword" name="newPassword" 
+                                   required placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)">
+                            <small class="text-muted">Tối thiểu 6 ký tự</small>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">Xác Nhận Mật Khẩu <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="confirmPassword" name="confirmPassword" 
+                                   required placeholder="Nhập lại mật khẩu mới">
+                        </div>
+
+                        <button type="submit" class="btn btn-danger w-100">
+                            <i class="bi bi-check-circle me-1"></i>Đổi Mật Khẩu
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

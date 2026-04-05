@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="vi" xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thông tin cá nhân - Thư viện Ngư Quỳ</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .profile-header {
+            background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .profile-card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 1rem 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .info-label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 200px;
+        }
+        .info-value {
+            color: #212529;
+            word-break: break-word;
+        }
+        .status-active {
+            color: #28a745;
+            font-weight: 600;
+        }
+        .status-inactive {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .card-image {
+            max-width: 300px;
+            margin-bottom: 2rem;
+        }
+        .btn-back {
+            margin-bottom: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div th:insert="fragments/header :: navbar"></div>
+    <div th:insert="fragments/header :: sidebar"></div>
+
+    <div class="container mt-4">
+        <!-- Back Button -->
+        <div class="btn-back">
+            <a href="/user/borrow-history" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left me-2"></i>Quay lại
+            </a>
+        </div>
+
+        <!-- Profile Header -->
+        <div class="profile-header">
+            <h1 class="mb-2"><i class="bi bi-person-circle me-2"></i>Thông tin cá nhân</h1>
+            <p class="mb-0">Xem và quản lý thông tin cá nhân của bạn</p>
+        </div>
+
+        <!-- Main Profile Card -->
+        <div class="profile-card">
+            <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                <h3 class="mb-0">
+                    <i class="bi bi-person-vcard text-primary me-2"></i>Thông tin cơ bản
+                </h3>
+                <a href="/user/profile/edit" class="btn btn-sm btn-primary">
+                    <i class="bi bi-pencil me-1"></i>Sửa
+                </a>
+            </div>
+            
+            <div class="info-row">
+                <span class="info-label">Họ và tên:</span>
+                <span class="info-value" th:text="${user.fullName}">Nguyễn Văn A</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="info-label">Mã số sinh viên:</span>
+                <span class="info-value" th:text="${user.mssv}">21051234</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="info-label">Email:</span>
+                <span class="info-value" th:text="${user.email}">user@hutech.edu.vn</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="info-label">Vai trò:</span>
+                <span class="info-value" th:text="${user.role == 'ADMIN' ? 'Quản trị viên' : 'Sinh viên'}">Sinh viên</span>
+            </div>
+        </div>
+
+        <!-- Library Card Info -->
+        <div class="profile-card">
+            <h3 class="mb-4 pb-3 border-bottom">
+                <i class="bi bi-credit-card text-success me-2"></i>Thông tin thẻ độc giả
+            </h3>
+            
+            <div class="info-row">
+                <span class="info-label">Số ID thẻ:</span>
+                <span class="info-value" th:text="${user.idCard}">LIB-2026-XXXX</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="info-label">Ngày gia hạn lần cuối:</span>
+                <span class="info-value" th:text="${user.lastRenewedDate}">01/01/2025</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="info-label">Ngày hết hạn:</span>
+                <span class="info-value" th:text="${user.expiryDate}">01/01/2027</span>
+            </div>
+            
+            <div class="info-row">
+                <span class="info-label">Trạng thái thẻ:</span>
+                <span th:class="${user.status == 'ACTIVE' ? 'status-active' : 'status-inactive'}" 
+                      th:text="${user.status == 'ACTIVE' ? '● Đang hoạt động' : '● Bị khóa'}"></span>
+            </div>
+
+            <div class="info-row">
+                <span class="info-label">Số lần gia hạn (năm nay):</span>
+                <span class="info-value" th:text="${user.renewalCount}">0</span>
+            </div>
+        </div>
+
+
+        <!-- Action Buttons -->
+        <div class="d-flex gap-2 mb-4">
+            <a href="/user/borrow-history" class="btn btn-primary">
+                <i class="bi bi-clock-history me-2"></i>Lịch sử mượn sách
+            </a>
+            <a href="/" class="btn btn-outline-secondary">
+                <i class="bi bi-house me-2"></i>Trang chủ
+            </a>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-light border-top mt-5 py-4">
+        <div class="container text-center text-muted">
+            <p class="mb-0">&copy; 2026 Thư viện Ngư Quỳ - HUTECH. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

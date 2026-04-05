@@ -259,4 +259,95 @@ public class UserController {
             return "redirect:/user/borrow?bookId=" + bookId;
         }
     }
+
+    /**
+     * Xem thông tin cá nhân (Profile) của user
+     * GET /user/profile
+     */
+    @GetMapping("/profile")
+    public String viewProfile(Principal principal, Model model) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+        if (!userOpt.isPresent()) {
+            return "redirect:/login";
+        }
+        
+        User user = userOpt.get();
+        model.addAttribute("user", user);
+        
+        return "user/profile";
+    }
+
+    /**
+     * Hiển thị form để sửa thông tin cơ bản
+     * GET /user/profile/edit
+     */
+    @GetMapping("/profile/edit")
+    public String showEditProfileForm(Principal principal, Model model) {
+        if (principal == null) {
+            return "redirect:/login";
+        }
+        
+        Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+        if (!userOpt.isPresent()) {
+            return "redirect:/login";
+        }
+        
+        User user = userOpt.get();
+        model.addAttribute("user", user);
+        
+        return "user/edit-profile";
+    }
+
+    /**
+     * Lưu thông tin cơ bản đã sửa
+     * POST /user/profile/edit
+     */
+    @PostMapping("/profile/edit")
+    public String saveEditProfile(@RequestParam String fullName,
+                                  @RequestParam String email,
+                                  Principal principal,
+                                  RedirectAttributes attributes) {
+        try {
+            if (principal == null) {
+                return "redirect:/login";
+            }
+            
+            Optional<User> userOpt = userRepository.findByMssv(principal.getName());
+            if (!userOpt.isPresent()) {
+                return "redirect:/login";
+            }
+            
+            User user = userOpt.get();
+            
+            // Validate input
+            if (fullName == null || fullName.trim().isEmpty()) {
+                attributes.addFlashAttribute("error", "❌ Họ và tên không được để trống!");
+                return "redirect:/user/profile/edit";
+            }
+            
+            if (email == null || email.trim().isEmpty()) {
+                attributes.addFlashAttribute("error", "❌ Email không được để trống!");
+                return "redirect:/user/profile/edit";
+            }
+            
+            // Update user information
+            user.setFullName(fullName.trim());
+            user.setEmail(email.trim());
+            
+            // Save to database
+            userRepository.save(user);
+            
+            attributes.addFlashAttribute("success", "✅ Cập nhật thông tin cá nhân thành công!");
+            return "redirect:/user/profile";
+            
+        } catch (Exception e) {
+            attributes.addFlashAttribute("error", "❌ Lỗi: " + e.getMessage());
+            return "redirect:/user/profile/edit";
+        }
+    }
 }
+
